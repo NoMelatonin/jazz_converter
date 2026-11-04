@@ -1,0 +1,104 @@
+[
+  {
+    "name": "@nodable/entities",
+    "version": "3.1.0",
+    "license": "MIT",
+    "file": "_nodable_entities.txt"
+  },
+  {
+    "name": "@types/react",
+    "version": "19.3.0",
+    "license": "MIT",
+    "file": "_types_react.txt"
+  },
+  {
+    "name": "anynum",
+    "version": "1.0.1",
+    "license": "MIT",
+    "file": "anynum.txt"
+  },
+  {
+    "name": "csstype",
+    "version": "3.2.3",
+    "license": "MIT",
+    "file": "csstype.txt"
+  },
+  {
+    "name": "fast-xml-builder",
+    "version": "1.3.1",
+    "license": "MIT",
+    "file": "fast-xml-builder.txt"
+  },
+  {
+    "name": "fast-xml-parser",
+    "version": "5.12.0",
+    "license": "MIT",
+    "file": "fast-xml-parser.txt"
+  },
+  {
+    "name": "fflate",
+    "version": "0.8.3",
+    "license": "MIT",
+    "file": "fflate.txt"
+  },
+  {
+    "name": "is-unsafe",
+    "version": "2.0.3",
+    "license": "MIT",
+    "file": "is-unsafe.txt"
+  },
+  {
+    "name": "lucide-react",
+    "version": "1.68.0",
+    "license": "ISC",
+    "file": "lucide-react.txt"
+  },
+  {
+    "name": "midi-file",
+    "version": "1.2.4",
+    "license": "MIT",
+    "file": "midi-file.txt"
+  },
+  {
+    "name": "path-expression-matcher",
+    "version": "1.6.2",
+    "license": "MIT",
+    "file": "path-expression-matcher.txt"
+  },
+  {
+    "name": "react",
+    "version": "19.3.1",
+    "license": "MIT",
+    "file": "react.txt"
+  },
+  {
+    "name": "react-dom",
+    "version": "19.3.1",
+    "license": "MIT",
+    "file": "react-dom.txt"
+  },
+  {
+    "name": "scheduler",
+    "version": "0.28.0",
+    "license": "MIT",
+    "file": "scheduler.txt"
+  },
+  {
+    "name": "strnum",
+    "version": "2.5.1",
+    "license": "MIT",
+    "file": "strnum.txt"
+  },
+  {
+    "name": "xml-naming",
+    "version": "0.3.0",
+    "license": "MIT",
+    "file": "xml-naming.txt"
+  },
+  {
+    "name": "zod",
+    "version": "4.6.7",
+    "license": "MIT",
+    "file": "zod.txt"
+  }
+]

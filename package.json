@@ -1,0 +1,75 @@
+{
+  "name": "jazz-converter",
+  "productName": "Jazz Converter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lokale Swing-Arrangements für zwei Hände",
+  "author": "Jazz Converter",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && node scripts/notices.mjs && vite build && node scripts/build-desktop.mjs",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e.mjs",
+    "verify:online": "node scripts/check-online.mjs",
+    "verify:package": "node scripts/check-package.mjs",
+    "assets": "node scripts/fetch-assets.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "previews": "node scripts/listening.mjs",
+    "package": "npm run build && node scripts/package.mjs",
+    "package:local": "npm run build && node scripts/package.mjs --local"
+  },
+  "build": {
+    "appId": "de.jazzconverter.app",
+    "productName": "Jazz Converter",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "public/icon.icns",
+      "minimumSystemVersion": "14.0.0",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.12.0",
+    "fflate": "0.8.3",
+    "lucide-react": "1.68.0",
+    "midi-file": "1.2.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}

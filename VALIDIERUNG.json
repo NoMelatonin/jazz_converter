@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "verifiedAt": "2026-11-04T10:22:58.427Z",
+  "unitTests": 26,
+  "offlineDesktopTest": "passed from read-only arm64 DMG",
+  "externalRequestsInOfflineTest": 0,
+  "onlineSourcesVerified": 3,
+  "appSignatures": {
+    "arm64": "verified",
+    "x64": "verified"
+  },
+  "diskImageChecksums": "verified",
+  "pending": [
+    "Manual musical listening acceptance",
+    "Physical audio/display latency measurement on target device",
+    "Native Intel execution"
+  ],
+  "artifacts": [
+    {
+      "name": "Jazz Converter-1.0.0-arm64.dmg",
+      "bytes": 128953457,
+      "sha256": "4d120a86802255851065824e7294dbe4976bca433112ed2c5f69387fb61cd0ea"
+    },
+    {
+      "name": "Jazz Converter-1.0.0.dmg",
+      "bytes": 135951687,
+      "sha256": "442a24d2c1648382fc48c6fabadc3b360e160b1c46d0a9593c72aecec0cf0916"
+    }
+  ]
+}
