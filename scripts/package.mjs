@@ -8,6 +8,11 @@ import { tmpdir } from "node:os";
 const staging = await mkdtemp(path.join(tmpdir(), "jazz-package-"));
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 const local = process.argv.includes("--local");
+await readFile("resources/omr/manifest.json").catch(() => {
+  throw new Error(
+    "OMR-Ressourcen fehlen. Zuerst npm run omr:assets ausführen.",
+  );
+});
 await build({
   targets: Platform.MAC.createTarget(
     local ? "dir" : "dmg",
@@ -16,6 +21,17 @@ await build({
   config: {
     ...pkg.build,
     directories: { ...pkg.build.directories, output: staging },
+    extraResources: [
+      { from: "resources/omr/${arch}", to: "omr/${arch}" },
+      ...[
+        "tessdata",
+        "patch",
+        "jazz-omr-isolation.jar",
+        "manifest.json",
+        "audiveris-source-5.11.0.zip",
+        "LICENSE-Audiveris.txt",
+      ].map((name) => ({ from: `resources/omr/${name}`, to: `omr/${name}` })),
+    ],
   },
 });
 await mkdir("release", { recursive: true });

@@ -10,6 +10,53 @@ export interface Note {
   track: string;
   melody?: boolean;
   hand?: Hand;
+  partId?: string;
+  staff?: number;
+  voice?: string;
+  writtenPitch?: number;
+  source?: SourceRef;
+  sourceIds?: string[];
+}
+export interface SourceRef {
+  page?: number;
+  measure: number;
+  partId?: string;
+  x?: number;
+  y?: number;
+}
+export interface Part {
+  id: string;
+  name: string;
+  instrument?: string;
+  program?: number;
+  staves: number;
+  percussion?: boolean;
+  transpositions: { at: Beat; semitones: number }[];
+  clefs?: { staff: number; sign: string; line: number }[];
+}
+export interface ReviewIssue {
+  id: string;
+  severity: "warning" | "error";
+  kind: "recognition" | "rhythm" | "melody" | "instrument" | "playability";
+  message: string;
+  source?: SourceRef;
+}
+export interface PdfSource {
+  version: string;
+  pages: number[];
+  sourceHash: string;
+  issues: ReviewIssue[];
+  reviewed?: boolean;
+}
+export interface Rest {
+  id: string;
+  start: Beat;
+  duration: Beat;
+  track: string;
+  partId?: string;
+  staff?: number;
+  voice?: string;
+  source?: SourceRef;
 }
 export interface Track {
   id: string;
@@ -17,6 +64,11 @@ export interface Track {
   channel?: number;
   notes: Note[];
   score: number;
+  partId?: string;
+  staff?: number;
+  instrument?: string;
+  program?: number;
+  percussion?: boolean;
 }
 export interface Meter {
   at: Beat;
@@ -60,12 +112,18 @@ export interface Song {
   duration: Beat;
   warnings: string[];
   key?: { root: number; minor: boolean };
+  parts?: Part[];
+  rests?: Rest[];
+  issues?: ReviewIssue[];
+  pdf?: PdfSource;
+  schemaVersion?: number;
 }
 export interface Settings {
   style: "swing";
   difficulty: Difficulty;
   melodyTrackId: string;
   chords: Chord[];
+  mode?: "original" | "reduction" | "swing";
 }
 export interface Arrangement {
   songId: string;
@@ -80,6 +138,7 @@ export interface Arrangement {
   sections: Section[];
   duration: Beat;
   warnings: string[];
+  report?: PianoAnalysis;
 }
 export interface CatalogEntry {
   id: string;
@@ -96,7 +155,38 @@ export interface CatalogSong {
   song: Song;
   settings?: Settings;
 }
-export const ENGINE_VERSION = "1.0.0";
+export interface PianoAnalysis {
+  kind: "piano" | "solo" | "ensemble" | "unknown";
+  directlyPlayable: boolean;
+  reasons: string[];
+  warnings: string[];
+  melody: MelodySegment[];
+  issues: ReviewIssue[];
+}
+export interface MelodySegment {
+  fromBar: number;
+  toBar: number;
+  trackId: string;
+  confidence: number;
+}
+export interface PdfDocument {
+  id: string;
+  title: string;
+  pages: number;
+  bytes: number;
+  existing?: string[];
+  lowResolutionPages?: number[];
+}
+export interface PdfJob {
+  id: string;
+  documentId: string;
+  status: "queued" | "running" | "complete" | "error" | "cancelled";
+  progress: number;
+  message: string;
+  results?: CatalogSong[];
+  error?: string;
+}
+export const ENGINE_VERSION = "2.0.0";
 export const LIMITS = {
   easy: { span: 7, left: 2, right: 3 },
   medium: { span: 12, left: 3, right: 4 },

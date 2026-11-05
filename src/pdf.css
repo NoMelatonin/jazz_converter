@@ -1,0 +1,351 @@
+.pdf-import-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.2fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.pdf-view {
+  border: 1px solid #d4ddc9;
+  border-radius: 9px;
+  background: #e8ece1;
+  overflow: hidden;
+}
+.pdf-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #d4ddc9;
+  color: #718763;
+  font-size: 11px;
+}
+.pdf-view-toolbar > span {
+  flex: 1;
+}
+.pdf-view-toolbar > button {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+.pdf-canvas-scroll {
+  max-height: 650px;
+  overflow: auto;
+  padding: 15px;
+  min-height: 180px;
+}
+.pdf-canvas-scroll canvas {
+  display: block;
+  margin: auto;
+  background: #fff;
+  box-shadow: 0 2px 8px #0002;
+  max-width: none;
+}
+.field {
+  display: grid;
+  gap: 9px;
+  margin: 20px 0;
+  font-size: 12px;
+  color: #758a65;
+}
+.field input {
+  padding: 12px;
+  border: 1px solid #d6dfca;
+  border-radius: 5px;
+  background: #fafcf4;
+  color: #4d6c3d;
+  width: 100%;
+}
+.field small {
+  font-size: 10px;
+  line-height: 1.5;
+  color: #96a486;
+}
+.pdf-import .panel h2,
+.score-review h2 {
+  font:
+    25px Georgia,
+    serif;
+  letter-spacing: -0.5px;
+}
+.pdf-import .panel > p {
+  font-size: 12px;
+  color: #879677;
+}
+.pdf-import-actions {
+  margin-top: 24px;
+  display: flex;
+}
+.pdf-job {
+  border: 1px solid #d9e4c9;
+  border-radius: 6px;
+  padding: 14px;
+  background: #f0f5e8;
+  margin: 20px 0;
+  font-size: 12px;
+  color: #6b8557;
+}
+.pdf-job > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pdf-job progress {
+  width: 100%;
+  accent-color: #789c5c;
+  height: 7px;
+}
+.score-summary {
+  display: flex;
+  gap: 17px;
+  align-items: center;
+}
+.score-summary > div:nth-child(2) {
+  flex: 1;
+}
+.score-status-icon {
+  width: 52px;
+  height: 57px;
+  border-radius: 8px;
+  background: #e5eddb;
+  color: #759263;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.score-summary h2 {
+  font:
+    22px Georgia,
+    serif;
+  margin: 8px 0;
+  color: #415d34;
+}
+.score-summary p {
+  margin: 0;
+  color: #8d9c7c;
+  font-size: 11px;
+}
+.piano-options {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.piano-options label {
+  display: grid;
+  gap: 8px;
+  font-size: 10px;
+  color: #82956e;
+  flex: 1;
+  min-width: 180px;
+}
+.piano-options .button {
+  font-size: 11px;
+}
+.score-export-buttons {
+  display: flex;
+  gap: 9px;
+}
+.score-bottom-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+}
+.recognition-warning {
+  background: #f7efd9;
+  border: 1px solid #e5d5a9;
+  color: #a0874c;
+}
+.recognition-warning > span {
+  flex: 1;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0;
+}
+.section-title h2 {
+  margin: 10px 0;
+}
+.review-issues {
+  background: #f8f0dd;
+  border: 1px solid #e9d8ae;
+  border-radius: 7px;
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+  margin-bottom: 20px;
+  max-height: 190px;
+  overflow: auto;
+}
+.review-issues > button {
+  text-align: left;
+  padding: 9px;
+  display: grid;
+  gap: 4px;
+  border-radius: 5px;
+  color: #8e7748;
+  font-size: 11px;
+}
+.review-issues > button:hover {
+  background: #f1e4c6;
+}
+.review-issues strong {
+  font-size: 10px;
+}
+.score-review-grid {
+  display: grid;
+  grid-template-columns: minmax(250px, 1fr) minmax(350px, 1.3fr);
+  gap: 20px;
+  align-items: start;
+}
+.score-review-grid:has(> .panel:first-child) {
+  grid-template-columns: 1fr;
+}
+.score-review .panel {
+  padding: 20px;
+  min-width: 0;
+}
+.score-review-grid .field {
+  margin-top: 0;
+}
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-toolbar > label {
+  display: grid;
+  gap: 6px;
+  font-size: 10px;
+  color: #829570;
+  flex: 1;
+  min-width: 100px;
+}
+.meter-edit {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.meter-edit input {
+  width: 50px;
+  border: 1px solid #dce5cd;
+  border-radius: 4px;
+  padding: 10px;
+  color: #617b4d;
+  background: #f8fbf0;
+}
+.review-table-scroll {
+  max-height: 500px;
+  overflow: auto;
+  border: 1px solid #e1e8d7;
+  border-radius: 6px;
+}
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+.review-table th {
+  position: sticky;
+  top: 0;
+  background: #edf3e4;
+  color: #80946b;
+  font-weight: 500;
+  font-size: 9px;
+  text-align: left;
+  padding: 10px;
+}
+.review-table td {
+  border-top: 1px solid #e6ecdc;
+  padding: 7px;
+  vertical-align: top;
+  color: #7a8f66;
+}
+.review-table input {
+  width: 100%;
+  padding: 9px 5px;
+  background: #fafcf5;
+  border: 1px solid #dfe7d2;
+  border-radius: 4px;
+  color: #4b683a;
+  font-size: 11px;
+}
+.review-table th:last-child {
+  width: 35px;
+}
+.review-table td small {
+  display: block;
+  font-size: 7px;
+  color: #91a17e;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+}
+.review-table select {
+  font-size: 10px;
+  padding: 8px 3px;
+  width: 100%;
+}
+.review-add {
+  display: flex;
+  gap: 20px;
+  margin: 3px 0 20px;
+}
+.part-editor {
+  border-top: 1px solid #dce6ce;
+  padding: 15px 0;
+  color: #7f946b;
+  font-size: 11px;
+}
+.part-editor summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.part-editor > label {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.part-editor input {
+  width: 55%;
+  font-size: 11px;
+  padding: 8px;
+  border: 1px solid #dce6ce;
+  background: #fafdf4;
+  border-radius: 4px;
+  color: #607b4c;
+}
+.part-editor select {
+  width: 45%;
+  font-size: 10px;
+}
+.score-review .inline-hint {
+  font-size: 10px;
+}
+@media (max-width: 1150px) {
+  .pdf-import-grid {
+    gap: 16px;
+    grid-template-columns: minmax(280px, 1fr) minmax(250px, 1fr);
+  }
+  .score-review-grid {
+    grid-template-columns: 1fr;
+  }
+  .score-summary {
+    flex-wrap: wrap;
+  }
+  .score-summary > button {
+    margin-left: 69px;
+  }
+  .score-export-buttons .button {
+    font-size: 10px;
+    padding: 9px;
+  }
+  .score-workspace .result-actions {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}

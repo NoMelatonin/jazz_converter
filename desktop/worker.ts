@@ -1,6 +1,8 @@
 import { parentPort } from "node:worker_threads";
 import { importSong } from "../src/core/import";
-import { arrange } from "../src/core/arrange";
+import { convertArrangement } from "../src/core/convert";
+import { analyzePiano } from "../src/core/piano";
+import { exportMusicXml } from "../src/core/musicxml";
 import { exportMidi } from "../src/core/midi";
 import { chordsFor } from "../src/core/harmony";
 parentPort!.on(
@@ -13,8 +15,14 @@ parentPort!.on(
           : action === "chords"
             ? chordsFor(song, trackId)
             : action === "arrange"
-              ? arrange(song, settings)
-              : exportMidi(arrange(song, settings));
+              ? convertArrangement(song, settings)
+              : action === "piano-analysis"
+                ? analyzePiano(song, trackId)
+                : action === "musicxml"
+                  ? exportMusicXml(
+                      settings ? convertArrangement(song, settings) : song,
+                    )
+                  : exportMidi(convertArrangement(song, settings));
       parentPort!.postMessage({ requestId, ok: true, data });
     } catch (e) {
       parentPort!.postMessage({

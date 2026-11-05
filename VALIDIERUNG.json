@@ -1,15 +1,29 @@
 {
-  "version": "1.0.0",
-  "verifiedAt": "2026-11-04T10:22:58.427Z",
-  "unitTests": 26,
+  "version": "2.0.0",
+  "verifiedAt": "2026-11-04T19:52:49.034180+00:00",
+  "unitTests": 39,
   "offlineDesktopTest": "passed from read-only arm64 DMG",
-  "externalRequestsInOfflineTest": 0,
-  "onlineSourcesVerified": 3,
+  "offlineDesktopScenarios": 11,
+  "pdfDesktopTest": "passed from read-only arm64 DMG with bundled Java and models",
+  "pdfDesktopScenarios": 10,
+  "pdfReferenceCases": {
+    "total": 8,
+    "exactRecognition": 6,
+    "recognitionErrorsCorrectlyGated": 2
+  },
+  "independentFullOmrRepeat": "piano and orchestra-scan: byte-identical MIDI at both difficulty levels on Apple Silicon",
+  "externalRendererRequestsInOfflineTests": 0,
+  "onlineSourcesVerified": {
+    "count": 3,
+    "lastVerifiedVersion": "1.0.0",
+    "rerunForVersion2": false
+  },
   "appSignatures": {
     "arm64": "verified",
     "x64": "verified"
   },
   "diskImageChecksums": "verified",
+  "architectureGuide": "ARCHITEKTUR.md - four reading depths",
   "pending": [
     "Manual musical listening acceptance",
     "Physical audio/display latency measurement on target device",
@@ -17,14 +31,14 @@
   ],
   "artifacts": [
     {
-      "name": "Jazz Converter-1.0.0-arm64.dmg",
-      "bytes": 128953457,
-      "sha256": "4d120a86802255851065824e7294dbe4976bca433112ed2c5f69387fb61cd0ea"
+      "name": "Jazz Converter-2.0.0-arm64.dmg",
+      "bytes": 292822372,
+      "sha256": "24983bbce4b6a690849bc3aefa2809e4fee2ecd1b9330cc2ff19b65cb9122262"
     },
     {
-      "name": "Jazz Converter-1.0.0.dmg",
-      "bytes": 135951687,
-      "sha256": "442a24d2c1648382fc48c6fabadc3b360e160b1c46d0a9593c72aecec0cf0916"
+      "name": "Jazz Converter-2.0.0.dmg",
+      "bytes": 301749821,
+      "sha256": "66a6eee47427e93d15d32a59ec6b25f940640a8b360231a532519755fe9f99dd"
     }
   ]
 }

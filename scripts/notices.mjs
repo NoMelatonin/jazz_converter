@@ -26,7 +26,7 @@ for (const [directory, pkg] of Object.entries(lock.packages)) {
           path.join(root, "_nodable_entities-upstream.txt"),
           "utf8",
         )
-      : undefined;
+      : info.name.startsWith('@napi-rs/canvas-') ? await readFile('node_modules/@napi-rs/canvas/LICENSE','utf8') : undefined;
   if (!licenseText) throw new Error(`Missing license: ${directory}`);
   await writeFile(
     path.join(root, filename),

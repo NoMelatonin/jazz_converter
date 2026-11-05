@@ -10,10 +10,14 @@ import type {
   Song,
   Tempo,
   Track,
+  Part,
+  Rest,
+  ReviewIssue,
 } from "./model";
 import { add, beat, cmp, end, max, mul, sub, value } from "./time";
 import { rankTracks } from "./melody";
 import { parseChord } from "./harmony";
+import { instrumentTransposition } from "./instruments";
 
 type Element = {
   name: string;
@@ -162,7 +166,11 @@ function measureSequence(measures: Element[]): number[] {
   return result;
 }
 
-export function importXml(bytes: Uint8Array, filename: string): Song {
+export function importXml(
+  bytes: Uint8Array,
+  filename: string,
+  options: { lenient?: boolean } = {},
+): Song {
   const roots = parse(xmlText(bytes, filename));
   let root = roots.find(
     (e) => e.name === "score-partwise" || e.name === "score-timewise",
@@ -197,9 +205,34 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
       .map((p) => [p.attrs.id, txt(p, "part-name", p.attrs.id)]),
   );
   const parts = children(root, "part");
+  const scoreParts: Part[] = parts.map((part) => {
+    const definition = child(root!, "part-list")?.children.find(
+      (p) => p.name === "score-part" && p.attrs.id === part.attrs.id,
+    );
+    const instrument = definition && child(definition, "score-instrument");
+    const midi = definition && child(definition, "midi-instrument");
+    return {
+      id: part.attrs.id,
+      name: partNames.get(part.attrs.id) ?? part.attrs.id,
+      instrument: instrument ? txt(instrument, "instrument-name") : undefined,
+      program:
+        midi && child(midi, "midi-program")
+          ? num(midi, "midi-program") - 1
+          : undefined,
+      percussion: !!midi && !!child(midi, "midi-unpitched"),
+      staves: 1,
+      transpositions: [],
+    };
+  });
   if (!parts.length)
     throw new Error("Die MusicXML-Datei enthält keine Stimmen.");
   const firstMeasures = children(parts[0], "measure");
+  let sharedDivisions = 1;
+  const divisionMap = firstMeasures.map((m) => {
+    const a = child(m, "attributes");
+    if (a && child(a, "divisions")) sharedDivisions = num(a, "divisions", 1);
+    return sharedDivisions;
+  });
   const sequence = measureSequence(firstMeasures);
   const tracks = new Map<string, Track>(),
     tempos: Tempo[] = [{ at: beat(0), bpm: 120 }],
@@ -208,15 +241,61 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
     chords: Chord[] = [],
     sections: Section[] = [],
     warnings: string[] = [];
+  const rests: Rest[] = [],
+    issues: ReviewIssue[] = [];
   let key: Song["key"];
   let totalNotes = 0;
   // Read each source measure before repetition expansion so divisions and meter retain their source meaning.
   const parsedParts = parts.map((part, pi) => {
+    const ownDivisions = children(part, "measure").some((m) => {
+      const a = child(m, "attributes");
+      return a && child(a, "divisions");
+    });
     let divisions = 1,
       numerator = 4,
       denominator = 4,
-      currentTempo = 120;
+      currentTempo = 120,
+      transpose = 0,
+      page = 1;
+    const label = `${scoreParts[pi].name} ${scoreParts[pi].instrument ?? ""}`;
+    const explicit = children(part, "measure").some((m) =>
+      children(m, "attributes").some((a) => child(a, "transpose")),
+    );
+    if (!explicit) {
+      transpose = instrumentTransposition(label) ?? 0;
+      if (transpose)
+        scoreParts[pi].transpositions.push({
+          at: beat(0),
+          semitones: transpose,
+        });
+      else if (
+        options.lenient &&
+        /clarinet|klarinette|trumpet|trompete|horn|sax/i.test(label)
+      )
+        issues.push({
+          id: `transpose-${part.attrs.id}`,
+          severity: "warning",
+          kind: "instrument",
+          message: `Bei „${scoreParts[pi].name}“ ist die Instrumententransposition nicht angegeben. Klingende Tonhöhe prüfen.`,
+          source: { page: 1, measure: 1, partId: part.attrs.id },
+        });
+    }
     return children(part, "measure").map((measure, mi) => {
+      if (!ownDivisions) divisions = divisionMap[mi] ?? divisionMap.at(-1) ?? 1;
+      const print = child(measure, "print");
+      if (mi && print?.attrs["new-page"] === "yes") page++;
+      const source = { page, measure: mi + 1, partId: part.attrs.id };
+      const issue = (
+        message: string,
+        severity: "warning" | "error" = "error",
+      ) =>
+        issues.push({
+          id: `xml-${pi}-${mi}-${issues.length}`,
+          severity,
+          kind: "recognition",
+          message,
+          source,
+        });
       const startingTempo = currentTempo;
       let cursor = beat(0),
         lastStart = beat(0),
@@ -224,10 +303,34 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
       const notes: Note[] = [],
         localChords: Chord[] = [],
         localTempos: Tempo[] = [],
-        localSections: Section[] = [];
+        localSections: Section[] = [],
+        localRests: Rest[] = [],
+        transpositions: { at: Beat; semitones: number }[] = [];
       for (const el of measure.children) {
         if (el.name === "attributes") {
           if (child(el, "divisions")) divisions = num(el, "divisions");
+          if (child(el, "staves"))
+            scoreParts[pi].staves = Math.max(
+              scoreParts[pi].staves,
+              num(el, "staves", 1),
+            );
+          const clefs = children(el, "clef").map((c) => ({
+            staff: Number(c.attrs.number ?? 1),
+            sign: txt(c, "sign"),
+            line: num(c, "line", 2),
+          }));
+          if (clefs.length && !scoreParts[pi].clefs?.length)
+            scoreParts[pi].clefs = clefs;
+          const trans = child(el, "transpose");
+          if (trans) {
+            transpose =
+              num(trans, "chromatic") + num(trans, "octave-change") * 12;
+            if (!Number.isInteger(transpose))
+              throw new Error(
+                "Mikrotonale Instrumententransposition wird nicht unterstützt.",
+              );
+            transpositions.push({ at: cursor, semitones: transpose });
+          }
           const time = child(el, "time");
           if (time) {
             const counts = children(time, "beats").map((e) =>
@@ -281,10 +384,15 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           if (
             sound &&
             ["dacapo", "dalsegno", "tocoda", "fine"].some((k) => sound.attrs[k])
-          )
-            throw new Error(
-              "D.C./D.S./Coda bitte vor dem Import ausschreiben oder als MIDI exportieren.",
+          ) {
+            if (!options.lenient)
+              throw new Error(
+                "D.C./D.S./Coda bitte vor dem Import ausschreiben oder als MIDI exportieren.",
+              );
+            issue(
+              "D.C./D.S./Coda erkannt: Ablauf vor der Übernahme prüfen und ausschreiben.",
             );
+          }
           const metronome = child(
             child(el, "direction-type") ?? el,
             "metronome",
@@ -318,10 +426,14 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           if (rehearsal?.text) localSections.push({ at, name: rehearsal.text });
         }
         if (el.name === "harmony") {
-          if (children(el, "degree").length)
-            throw new Error(
-              "Veränderte Akkorderweiterungen bitte vor dem MusicXML-Import vereinfachen oder als MIDI importieren.",
-            );
+          if (children(el, "degree").length) {
+            if (!options.lenient)
+              throw new Error(
+                "Veränderte Akkorderweiterungen bitte vor dem MusicXML-Import vereinfachen oder als MIDI importieren.",
+              );
+            issue("Veränderten Akkord bitte nachtragen.", "warning");
+            continue;
+          }
           const rootNote = child(el, "root");
           if (!rootNote) continue;
           const alter = num(rootNote, "root-alter");
@@ -344,10 +456,14 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
               "minor-sixth": "m6",
             } as Record<string, string>
           )[kind];
-          if (suffix === undefined)
-            throw new Error(
-              `Der Akkordtyp „${kind}“ wird noch nicht unterstützt. Bitte in MusicXML vereinfachen.`,
-            );
+          if (suffix === undefined) {
+            if (!options.lenient)
+              throw new Error(
+                `Der Akkordtyp „${kind}“ wird noch nicht unterstützt. Bitte in MusicXML vereinfachen.`,
+              );
+            issue(`Akkordtyp ${kind}: Harmonie prüfen.`, "warning");
+            continue;
+          }
           let symbol =
             txt(rootNote, "root-step") +
             (alter === 1 ? "#" : alter === -1 ? "b" : "") +
@@ -362,6 +478,31 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
                 : num(bass, "bass-alter") === -1
                   ? "b"
                   : "");
+          if (transpose) {
+            const parsed = parseChord(symbol);
+            if (parsed) {
+              const names = [
+                "C",
+                "C#",
+                "D",
+                "Eb",
+                "E",
+                "F",
+                "F#",
+                "G",
+                "Ab",
+                "A",
+                "Bb",
+                "B",
+              ];
+              symbol =
+                names[(parsed.root + transpose + 120) % 12] +
+                suffix +
+                (child(el, "bass")
+                  ? "/" + names[(parsed.bass + transpose + 120) % 12]
+                  : "");
+            }
+          }
           if (!parseChord(symbol))
             throw new Error(`Ungültiger Akkord: ${symbol}`);
           localChords.push({
@@ -374,10 +515,16 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           });
         }
         if (el.name !== "note") continue;
-        if (child(el, "grace"))
-          throw new Error(
-            "Vorschlagsnoten bitte ausschreiben oder die Partitur als MIDI importieren.",
+        if (child(el, "grace")) {
+          if (!options.lenient)
+            throw new Error(
+              "Vorschlagsnoten bitte ausschreiben oder die Partitur als MIDI importieren.",
+            );
+          issue(
+            "Vorschlagsnote erkannt, aber noch nicht zeitlich zugeordnet. Bitte ergänzen oder ausdrücklich prüfen.",
           );
+          continue;
+        }
         const isChord = !!child(el, "chord");
         const start = isChord ? lastStart : cursor;
         const duration = beat(num(el, "duration"), divisions);
@@ -386,13 +533,28 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           cursor = add(cursor, duration);
         }
         extent = max(extent, add(start, duration), cursor);
-        if (child(el, "rest")) continue;
+        const staff = num(el, "staff", 1),
+          voice = txt(el, "voice", "1"),
+          trackId = `xml-${part.attrs.id}-${voice}`;
+        if (child(el, "rest")) {
+          localRests.push({
+            id: `rest-${pi}-${mi}-${localRests.length}`,
+            start,
+            duration,
+            track: trackId,
+            partId: part.attrs.id,
+            staff,
+            voice,
+            source,
+          });
+          continue;
+        }
         const p = child(el, "pitch");
         if (!p) {
           warnings.push("Unbestimmte Schlagzeugnoten wurden ausgelassen.");
           continue;
         }
-        const pitch =
+        const writtenPitch =
           12 * (num(p, "octave") + 1) +
           (
             { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as Record<
@@ -401,6 +563,7 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
             >
           )[txt(p, "step")] +
           num(p, "alter");
+        const pitch = writtenPitch + transpose;
         if (
           !Number.isInteger(pitch) ||
           pitch < 0 ||
@@ -408,13 +571,17 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           value(duration) <= 0
         )
           throw new Error("Ungültige Tonhöhe oder Notendauer.");
-        const trackId = `xml-${part.attrs.id}-${txt(el, "voice", "1")}`;
         if (!tracks.has(trackId))
           tracks.set(trackId, {
             id: trackId,
             name: `${partNames.get(part.attrs.id) ?? part.attrs.id} · Stimme ${txt(el, "voice", "1")}`,
             notes: [],
             score: 0,
+            partId: part.attrs.id,
+            staff,
+            instrument: scoreParts[pi].instrument,
+            program: scoreParts[pi].program,
+            percussion: scoreParts[pi].percussion,
           });
         const tie = children(el, "tie").map((t) => t.attrs.type);
         notes.push({
@@ -424,11 +591,28 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
           duration,
           velocity: 90,
           track: trackId,
+          partId: part.attrs.id,
+          staff,
+          voice,
+          writtenPitch,
+          source: {
+            ...source,
+            x: Number(el.attrs["default-x"]) || undefined,
+            y: Number(el.attrs["default-y"]) || undefined,
+          },
         });
         if (totalNotes > 200000)
           throw new Error("Die Datei enthält zu viele Noten.");
       }
       const nominal = beat(numerator * 4, denominator);
+      if (
+        options.lenient &&
+        measure.attrs.implicit !== "yes" &&
+        cmp(extent, nominal) > 0
+      )
+        issue(
+          `Takt ${mi + 1} enthält ${value(extent)} Viertel statt ${value(nominal)}. Notenwerte und Taktmaß prüfen.`,
+        );
       const duration =
         measure.attrs.implicit === "yes" ? extent : max(nominal, extent);
       if (value(duration) <= 0) throw new Error("Leerer Auftakt ohne Dauer.");
@@ -441,6 +625,8 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
         numerator,
         denominator,
         startingTempo,
+        localRests,
+        transpositions,
       };
     });
   });
@@ -488,6 +674,16 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
             previous.id = previous.id.replace(":tie-start", "");
         } else notes.push({ ...n, id: `${n.id}-${occurrence}`, start });
       }
+      rests.push(
+        ...measure.localRests.map((r) => ({
+          ...r,
+          id: `${r.id}-${occurrence}`,
+          start: add(at, r.start),
+        })),
+      );
+      scoreParts[pi].transpositions.push(
+        ...measure.transpositions.map((t) => ({ ...t, at: add(at, t.at) })),
+      );
       if (pi === 0 || !parsedParts[0][index].localChords.length)
         chords.push(
           ...measure.localChords.map((c) => ({
@@ -544,5 +740,9 @@ export function importXml(bytes: Uint8Array, filename: string): Song {
     duration: at,
     warnings: [...new Set(warnings)],
     key,
+    parts: scoreParts,
+    rests,
+    issues,
+    schemaVersion: 2,
   };
 }

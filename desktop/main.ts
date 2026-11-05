@@ -20,6 +20,8 @@ import {
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import { PdfService } from "./pdf-service";
+import { validateScore } from "../src/core/score-review";
 import { demoMidi, demoXml } from "../src/core/demo";
 import { ONLINE_CATALOGUE } from "../src/core/catalogue";
 import { add, beat, cmp } from "../src/core/time";
@@ -45,6 +47,7 @@ if (process.env.JAZZ_DATA_DIR)
   app.setPath("userData", process.env.JAZZ_DATA_DIR);
 let win: BrowserWindow;
 let worker: Worker | undefined;
+let pdfService: PdfService;
 let nextRequest = 0;
 const pending = new Map<
   number,
@@ -108,6 +111,7 @@ const rational = z.object({
 });
 const settingsSchema = z.object({
   style: z.literal("swing"),
+  mode: z.enum(["original", "reduction", "swing"]).optional(),
   difficulty: z.enum(["easy", "medium"]),
   melodyTrackId: z.string().min(1).max(200),
   chords: z
@@ -121,7 +125,7 @@ const settingsSchema = z.object({
         source: z.enum(["provided", "inferred", "manual"]),
       }),
     )
-    .min(1)
+    .min(0)
     .max(20000),
 });
 const store = () => path.join(app.getPath("userData"), "songs");
@@ -210,6 +214,8 @@ async function importBytes(
 }
 function checkedSettings(input: unknown, song: Song): Settings {
   const settings = settingsSchema.parse(input);
+  if (settings.mode === "original" || settings.mode === "reduction")
+    return settings;
   let cursor = beat(0);
   for (const c of settings.chords) {
     if (cmp(c.at, cursor) !== 0 || c.duration.n <= 0)
@@ -247,10 +253,14 @@ function handle(name: string, fn: (...args: any[]) => Promise<any>) {
 }
 async function importPaths(input: unknown) {
   const paths = z.array(z.string().max(4096)).min(1).max(20).parse(input);
-  const result: CatalogSong[] = [];
+  const result: (CatalogSong | import("../src/core/model").PdfDocument)[] = [];
   for (const file of paths) {
-    if (!path.isAbsolute(file) || !/\.(mid|midi|musicxml|mxl)$/i.test(file))
-      throw new Error("Bitte MIDI- oder MusicXML-Dateien öffnen.");
+    if (!path.isAbsolute(file) || !/\.(mid|midi|musicxml|mxl|pdf)$/i.test(file))
+      throw new Error("Bitte PDF-, MIDI- oder MusicXML-Dateien öffnen.");
+    if (/\.pdf$/i.test(file)) {
+      result.push(await pdfService.prepare(file));
+      continue;
+    }
     const info = await stat(file);
     if (!info.isFile() || info.size > 20 * 1024 * 1024)
       throw new Error(
@@ -264,6 +274,44 @@ app
   .whenReady()
   .then(async () => {
     await mkdir(store(), { recursive: true });
+    pdfService = new PdfService(
+      app.getPath("userData"),
+      app.isPackaged
+        ? path.join(process.resourcesPath, "omr")
+        : path.resolve("resources/omr"),
+      async (song, source, jobId, index, doc) => {
+        const id = createHash("sha256")
+          .update(`${jobId}:${index}`)
+          .digest("hex");
+        try {
+          return await load(id);
+        } catch (e: any) {
+          if (e.code !== "ENOENT") throw e;
+        }
+        song.id = id;
+        const record: CatalogSong = {
+          entry: {
+            id,
+            title: song.title,
+            artist: song.artist,
+            version: `PDF · ${song.pdf!.pages.length} Seite(n) · Erkannte Partitur${index ? ` ${index + 1}` : ""}`,
+            format: "PDF",
+            source: doc.title,
+            license: "Eigene Datei · Lizenz nicht angegeben",
+            importedAt: new Date().toISOString(),
+          },
+          song,
+        };
+        await writeFile(path.join(store(), `${id}.mxl`), source, {
+          flag: "wx",
+        }).catch((e: any) => {
+          if (e.code !== "EEXIST") throw e;
+        });
+        await atomicJson(path.join(store(), `${id}.json`), record);
+        return record;
+      },
+    );
+    await pdfService.init();
     await importBytes(demoXml(), "Bruder Jakob.musicxml", {
       version: "Demo · Melodie mit Akkorden",
       source: "Mitgelieferte Dateifassung",
@@ -297,7 +345,7 @@ app
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            `default-src 'self'; script-src 'self'${dev ? " 'unsafe-inline'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'${dev ? " ws://127.0.0.1:5173" : ""}; object-src 'none'; base-uri 'none'; frame-src 'none'`,
+            `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${dev ? " 'unsafe-inline'" : ""}; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self'; connect-src 'self'${dev ? " ws://127.0.0.1:5173" : ""}; object-src 'none'; base-uri 'none'; frame-src 'none'`,
           ],
         },
       }),
@@ -335,9 +383,16 @@ app
     handle("chords:analyze", async (id, input) => {
       const record = await load(id),
         trackId = z.string().max(200).parse(input);
-      if (!record.song.tracks.some((t) => t.id === trackId))
+      if (
+        trackId !== "auto" &&
+        !record.song.tracks.some((t) => t.id === trackId)
+      )
         throw new Error("Die Melodiestimme wurde nicht gefunden.");
-      return workerJob({ action: "chords", song: record.song, trackId });
+      return workerJob({
+        action: "chords",
+        song: record.song,
+        trackId: trackId === "auto" ? record.song.tracks[0].id : trackId,
+      });
     });
     handle("files:import", importPaths);
     handle("files:open", async () => {
@@ -346,8 +401,8 @@ app
         properties: ["openFile", "multiSelections"],
         filters: [
           {
-            name: "MIDI und MusicXML",
-            extensions: ["mid", "midi", "musicxml", "mxl"],
+            name: "PDF, MIDI und MusicXML",
+            extensions: ["pdf", "mid", "midi", "musicxml", "mxl"],
           },
         ],
       });
@@ -429,7 +484,7 @@ app
       });
       const result = await dialog.showSaveDialog(win, {
         title: "MIDI speichern",
-        defaultPath: `${record.song.title.replace(/[/\\:]/g, "-")} – Swing.mid`,
+        defaultPath: `${record.song.title.replace(/[/\\:]/g, "-")} – ${settings.mode === "original" ? "Klavier" : settings.mode === "reduction" ? "Klavierfassung" : "Swing"}.mid`,
         filters: [{ name: "Standard-MIDI", extensions: ["mid"] }],
       });
       if (result.canceled || !result.filePath) return null;
@@ -455,6 +510,59 @@ app
       }
       return folder;
     });
+    handle("pdf:bytes", async (id) => pdfService.bytes(idSchema.parse(id)));
+    handle("pdf:start", async (id, pages, rotation) =>
+      pdfService.start(
+        idSchema.parse(id),
+        z.array(z.number().int().positive()).min(1).max(200).parse(pages),
+        z.number().int().parse(rotation),
+      ),
+    );
+    handle("pdf:status", async (id) => pdfService.status(idSchema.parse(id)));
+    handle("pdf:cancel", async (id) => pdfService.cancel(idSchema.parse(id)));
+    handle("piano:analyze", async (id, trackId) => {
+      const record = await load(id);
+      return workerJob({
+        action: "piano-analysis",
+        song: record.song,
+        trackId:
+          trackId === undefined ? "auto" : z.string().max(200).parse(trackId),
+      });
+    });
+    handle("musicxml:save", async (id, input) => {
+      const record = await load(id),
+        settings = input ? checkedSettings(input, record.song) : undefined;
+      const xml = await workerJob<string>({
+        action: "musicxml",
+        song: record.song,
+        settings,
+      });
+      const result = await dialog.showSaveDialog(win, {
+        title: settings
+          ? "Klavierfassung als MusicXML speichern"
+          : "Erkannte Partitur als MusicXML speichern",
+        defaultPath: `${record.song.title.replace(/[/\\:]/g, "-")} – ${settings ? "Klavierfassung" : "Partitur"}.musicxml`,
+        filters: [{ name: "MusicXML", extensions: ["musicxml"] }],
+      });
+      if (result.canceled || !result.filePath) return null;
+      await writeFile(result.filePath, xml, "utf8");
+      return result.filePath;
+    });
+    handle("score:correct", async (id, input) => {
+      const record = await load(id);
+      const corrected = validateScore(input, record.song);
+      record.song = {
+        ...record.song,
+        ...corrected,
+        issues: [],
+        pdf: record.song.pdf
+          ? { ...record.song.pdf, reviewed: true }
+          : undefined,
+      };
+      delete record.settings;
+      await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
+      return record;
+    });
     await win.loadURL(dev ?? "jazz://app/");
     app.on("activate", () => {
       if (win.isDestroyed()) app.relaunch();
@@ -466,6 +574,7 @@ app
     app.quit();
   });
 app.on("window-all-closed", () => {
+  pdfService?.shutdown();
   void worker?.terminate();
   app.quit();
 });

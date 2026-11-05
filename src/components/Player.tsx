@@ -147,7 +147,11 @@ export function Player({
           <h2>
             {mode === "practice"
               ? "Ein Takt nach dem anderen."
-              : "Zeit für ein bisschen Swing."}
+              : "settings" in music &&
+                  music.settings.mode &&
+                  music.settings.mode !== "swing"
+                ? "Deine Noten. Dein Klavier."
+                : "Zeit für ein bisschen Swing."}
           </h2>
         </div>
         <div className="hand-legend">

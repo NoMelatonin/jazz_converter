@@ -30,7 +30,7 @@ export function exportMidi(arrangement: Arrangement): Uint8Array {
       order: 1,
       event: {
         type: "text",
-        text: `Swing / ${arrangement.settings.difficulty} / engine ${arrangement.version}`,
+        text: `${arrangement.settings.mode ?? "swing"} / ${arrangement.settings.difficulty} / engine ${arrangement.version}`,
       },
     },
     ...arrangement.tempos.map((t) => ({

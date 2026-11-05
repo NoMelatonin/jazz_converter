@@ -18,4 +18,15 @@ contextBridge.exposeInMainWorld("jazz", {
   convert: (id: string, settings: unknown) => call("arrange", id, settings),
   saveMidi: (id: string, settings: unknown) => call("midi:save", id, settings),
   demoFiles: () => call("demo:save"),
+  pdfBytes: (id: string) => call("pdf:bytes", id),
+  startPdf: (id: string, pages: number[], rotation: number) =>
+    call("pdf:start", id, pages, rotation),
+  pdfStatus: (id: string) => call("pdf:status", id),
+  cancelPdf: (id: string) => call("pdf:cancel", id),
+  analyzePiano: (id: string, trackId?: string) =>
+    call("piano:analyze", id, trackId),
+  saveMusicXml: (id: string, settings?: unknown) =>
+    call("musicxml:save", id, settings),
+  correctScore: (id: string, score: unknown) =>
+    call("score:correct", id, score),
 } satisfies JazzApi);

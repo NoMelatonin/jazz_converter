@@ -35,13 +35,17 @@ import type {
   Chord,
   Difficulty,
   Settings,
+  PdfDocument,
 } from "./core/model";
 import { LIMITS } from "./core/model";
 import { parseChord } from "./core/harmony";
 import { ONLINE_CATALOGUE, matches } from "./core/catalogue";
 import { extractMelody } from "./core/melody";
+import { sourceMelody } from "./core/piano";
 import { cmp, value } from "./core/time";
 import { Player } from "./components/Player";
+import { PdfImport } from "./components/PdfImport";
+import { ScoreWorkspace } from "./components/ScoreWorkspace";
 
 type Page = "library" | "online";
 export function App() {
@@ -67,6 +71,8 @@ export function App() {
   const [rangeFrom, setRangeFrom] = useState(1),
     [rangeTo, setRangeTo] = useState(1),
     [rangeChord, setRangeChord] = useState("C");
+  const [pdfDocument, setPdfDocument] = useState<PdfDocument | null>(null),
+    [scoreMode, setScoreMode] = useState(false);
   const showError = (e: unknown) =>
     setError(e instanceof Error ? e.message : String(e));
   async function task<T>(
@@ -95,10 +101,14 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notice]);
   async function selectRecord(next: CatalogSong) {
-    const id = next.settings?.melodyTrackId ?? next.song.tracks[0].id;
+    const id =
+      next.settings?.melodyTrackId ??
+      (next.song.pdf ? "auto" : next.song.tracks[0].id);
     const inferredChords =
       next.settings?.chords ?? (await window.jazz.analyze(next.entry.id, id));
     setRecord(next);
+    setPdfDocument(null);
+    setScoreMode(!!next.song.pdf);
     setArrangement(null);
     setPreview(null);
     setShowChords(false);
@@ -117,7 +127,10 @@ export function App() {
     await task("Datei wird geöffnet", async () => {
       const songs = await window.jazz.openFiles();
       await refresh();
-      if (songs[0]) await selectRecord(songs[0]);
+      if (songs[0]) {
+        if ("entry" in songs[0]) await selectRecord(songs[0]);
+        else setPdfDocument(songs[0]);
+      }
     });
   }
   async function drop(event: React.DragEvent) {
@@ -130,11 +143,16 @@ export function App() {
         files.map((f) => window.jazz.filePath(f)),
       );
       await refresh();
-      if (songs[0]) await selectRecord(songs[0]);
+      if (songs[0]) {
+        if ("entry" in songs[0]) await selectRecord(songs[0]);
+        else setPdfDocument(songs[0]);
+      }
     });
   }
   function library(next: Page) {
     setPage(next);
+    setPdfDocument(null);
+    setScoreMode(false);
     setRecord(null);
     setArrangement(null);
     setPreview(null);
@@ -174,11 +192,16 @@ export function App() {
   );
   const selectedTrack = record?.song.tracks.find((t) => t.id === trackId);
   const selectedMelody = useMemo(
-    () => (selectedTrack ? extractMelody(selectedTrack) : []),
-    [selectedTrack],
+    () =>
+      trackId === "auto" && record
+        ? sourceMelody(record.song, "auto")
+        : selectedTrack
+          ? extractMelody(selectedTrack)
+          : [],
+    [selectedTrack, trackId, record],
   );
   const previewMusic = useMemo(() => {
-    if (!preview || !record || !selectedTrack) return null;
+    if (!preview || !record) return null;
     const notes =
       preview === "melody"
         ? selectedMelody.map((n) => ({ ...n, hand: "right" as const }))
@@ -220,7 +243,7 @@ export function App() {
     );
     setError("");
   }
-  const step = !record ? 1 : arrangement ? 3 : 2;
+  const step = pdfDocument ? 1 : !record ? 1 : arrangement ? 3 : 2;
   const results = entries.filter((e) => matches(query, e)),
     online = ONLINE_CATALOGUE.filter((e) => matches(query, e));
   return (
@@ -288,7 +311,7 @@ export function App() {
             <i />
             Lokal auf deinem Mac
           </div>
-          <span className="app-version">VERSION 1.0 · SWING EDITION</span>
+          <span className="app-version">VERSION 2.0 · PIANO & SWING</span>
         </div>
       </aside>
       <main>
@@ -309,24 +332,28 @@ export function App() {
         </header>
         <div className="main-content">
           <div className="steps" aria-label="Fortschritt">
-            {["Song auswählen", "Jazz gestalten", "Anhören & üben"].map(
-              (label, i) => (
-                <div
-                  key={label}
-                  className={
-                    step === i + 1
-                      ? "step current"
-                      : step > i + 1
-                        ? "step done"
-                        : "step"
-                  }
-                >
-                  <span>{step > i + 1 ? <Check size={14} /> : i + 1}</span>
-                  {label}
-                  {i < 2 && <div className="step-line" />}
-                </div>
-              ),
-            )}
+            {[
+              "Song auswählen",
+              scoreMode || pdfDocument
+                ? "Noten & Klavierfassung"
+                : "Jazz gestalten",
+              "Anhören & üben",
+            ].map((label, i) => (
+              <div
+                key={label}
+                className={
+                  step === i + 1
+                    ? "step current"
+                    : step > i + 1
+                      ? "step done"
+                      : "step"
+                }
+              >
+                <span>{step > i + 1 ? <Check size={14} /> : i + 1}</span>
+                {label}
+                {i < 2 && <div className="step-line" />}
+              </div>
+            ))}
           </div>
           {error && (
             <div className="message error" role="alert">
@@ -351,7 +378,18 @@ export function App() {
               {busy} …
             </div>
           )}
-          {!record ? (
+          {pdfDocument ? (
+            <PdfImport
+              document={pdfDocument}
+              onClose={() => setPdfDocument(null)}
+              onComplete={(next) =>
+                void task("Partitur wird geladen", async () => {
+                  await refresh();
+                  await selectRecord(next);
+                })
+              }
+            />
+          ) : !record ? (
             <>
               <section className="hero">
                 <div>
@@ -530,7 +568,7 @@ export function App() {
                     <span>auf deinem Mac auswählen</span>
                   </p>
                   <small>
-                    MIDI (.mid, .midi) oder MusicXML (.musicxml, .mxl)
+                    PDF, MIDI (.mid, .midi) oder MusicXML (.musicxml, .mxl)
                   </small>
                 </div>
                 <span className="drop-plus">+</span>
@@ -562,7 +600,7 @@ export function App() {
                 </div>
                 <div>
                   <span className="eyebrow">
-                    {arrangement
+                    {scoreMode ? 'DEINE KLAVIERFASSUNG' : arrangement
                       ? "DEIN SWING-ARRANGEMENT"
                       : "MACH DEINEN SONG ZU JAZZ"}
                   </span>
@@ -585,7 +623,18 @@ export function App() {
                   </p>
                 </div>
               </div>
-              {!arrangement ? (
+              {scoreMode ? (
+                <ScoreWorkspace
+                  record={record}
+                  onReady={setArrangement}
+                  onUpdated={(next) => void selectRecord(next)}
+                  onSwing={() => {
+                    setScoreMode(false);
+                    setConfirmed(true);
+                    setArrangement(null);
+                  }}
+                />
+              ) : !arrangement ? (
                 <>
                   <section className="panel melody-panel">
                     <div className="panel-heading">
@@ -613,6 +662,12 @@ export function App() {
                           value={trackId}
                           onChange={(e) => changeTrack(e.target.value)}
                         >
+                          {record.song.pdf && (
+                            <option value="auto">
+                              Automatisch verfolgen · Instrumentwechsel
+                              berücksichtigen
+                            </option>
+                          )}
                           {record.song.tracks.map((t, i) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -1023,7 +1078,7 @@ export function App() {
         <div className="drop-overlay">
           <FileMusic size={44} />
           <h2>Deinen Song hier ablegen</h2>
-          <p>MIDI oder MusicXML</p>
+          <p>PDF, MIDI oder MusicXML</p>
         </div>
       )}
       {modal && (
@@ -1088,8 +1143,7 @@ export function App() {
                 <h2 id="modal-title">Vom Lieblingssong zum Swing.</h2>
                 <ol>
                   <li>
-                    Suche einen lokalen Song oder importiere MIDI
-                    beziehungsweise MusicXML.
+                    Suche einen lokalen Song oder öffne PDF, MIDI oder MusicXML.
                   </li>
                   <li>
                     Bestätige bei mehreren Stimmen die Melodie. Die Hörprobe
@@ -1108,7 +1162,8 @@ export function App() {
                 </ol>
                 <p>
                   Die Online-Auswahl umfasst drei freie Mutopia-Dateien. Andere
-                  Songs kannst du selbst importieren. Sprache, PDF und MP3
+                  Songs kannst du selbst importieren. PDF-Noten werden lokal
+                  erkannt und bei Bedarf für Klavier reduziert. Sprache und MP3
                   werden noch nicht unterstützt.
                 </p>
                 <button
@@ -1162,6 +1217,15 @@ export function App() {
                     {e.licenseUrl}
                   </p>
                 ))}
+                <p>
+                  <strong>PDF-Notenerkennung: Audiveris 5.11.0</strong>
+                  <br />
+                  GNU AGPL v3. Lokale Symbolerkennung und Tesseract mit englischen
+                  und deutschen Sprachdaten (Apache 2.0). Lizenztexte, Quellcode
+                  und die kleine Anpassung für private Arbeitsordner liegen im
+                  App-Paket unter Resources/omr. Die Notenerkennung verwendet
+                  mitgelieferte trainierte Modelle; das Arrangement folgt festen Regeln.
+                </p>
                 <p>
                   Importierte eigene Dateien werden nicht hochgeladen.
                   Lizenzangaben eigener Dateien werden nicht automatisch

@@ -1,9 +1,33 @@
 [
   {
+    "name": "@napi-rs/canvas",
+    "version": "1.1.0",
+    "license": "MIT",
+    "file": "_napi-rs_canvas.txt"
+  },
+  {
+    "name": "@napi-rs/canvas-darwin-arm64",
+    "version": "1.1.0",
+    "license": "MIT",
+    "file": "_napi-rs_canvas-darwin-arm64.txt"
+  },
+  {
     "name": "@nodable/entities",
     "version": "3.1.0",
     "license": "MIT",
     "file": "_nodable_entities.txt"
+  },
+  {
+    "name": "@pdf-lib/standard-fonts",
+    "version": "1.0.0",
+    "license": "MIT",
+    "file": "_pdf-lib_standard-fonts.txt"
+  },
+  {
+    "name": "@pdf-lib/upng",
+    "version": "1.0.1",
+    "license": "MIT",
+    "file": "_pdf-lib_upng.txt"
   },
   {
     "name": "@types/react",
@@ -60,10 +84,34 @@
     "file": "midi-file.txt"
   },
   {
+    "name": "pako",
+    "version": "1.0.11",
+    "license": "(MIT AND Zlib)",
+    "file": "pako.txt"
+  },
+  {
     "name": "path-expression-matcher",
     "version": "1.6.2",
     "license": "MIT",
     "file": "path-expression-matcher.txt"
+  },
+  {
+    "name": "pdf-lib",
+    "version": "1.17.1",
+    "license": "MIT",
+    "file": "pdf-lib.txt"
+  },
+  {
+    "name": "tslib",
+    "version": "1.14.1",
+    "license": "0BSD",
+    "file": "tslib.txt"
+  },
+  {
+    "name": "pdfjs-dist",
+    "version": "6.5.438",
+    "license": "Apache-2.0",
+    "file": "pdfjs-dist.txt"
   },
   {
     "name": "react",
