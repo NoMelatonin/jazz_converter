@@ -1,3 +1,30 @@
+# Ergänzung 2.1.0 · 5. November 2026
+
+- Neue installierbare DMGs: `release/Jazz Converter-2.1.0-arm64.dmg` und `release/Jazz Converter-2.1.0.dmg`. Beide schreibgeschützt eingehängt, Signaturen geprüft. Apple-Silicon-App direkt aus dem DMG: bestehende Import-/PDF-/Wiedergabe-/Fassungstests sowie neuer Video-End-to-End-Test bestanden (`npm run verify:package`, `test-results/package-report.json`).
+- Die erste zusätzliche PDF-Paketprüfung scheiterte am Seitenfeld, bevor OMR startete. Die Wiederholung mit protokollierter Eingabe und sofortigem Abbruch bei UI-Fehlern bestand vollständig; eine produktseitige Ursache wurde nicht nachgewiesen.
+- 82 Unit-Tests bestanden, einschließlich neuer Harmonie-, Dichte-, Transkriptions-, Timing- und Exportregressionen.
+- Bestehende Electron-Tests für Import, hörbares Web Audio, Transport, MIDI-Export und Fassungs-/Altbestandsschutz bestanden.
+- Neuer echter Electron-Ablauf bestanden: lokale Videodatei, Vorschau, drei Kalibrierpunkte, Bilderkennung, unveränderte Hörprobe, MIDI/MusicXML, Notenkorrektur, Tempozuordnung, Prüfstatus, Akkordbestätigung, Jazzumwandlung, lokale Audioerkennung, Abbruch und Linkvalidierung. Eigene Testkataloge; keine bestehenden Nutzerdaten verändert.
+- Einrichtung aus leerem privaten Laufzeitverzeichnis mit echten offiziellen Downloads bestanden. Modelldatei SHA-256-geprüft; Python und 55 Pakete einschließlich FFmpeg/yt-dlp installiert. Ein Zenodo-HTTP-403 wurde durch Nutzung des offiziellen Datei-API-Endpunkts behoben. Modell 172 MB; installierte Umgebung mit Cache rund 2,1 GB.
+- Beide vollständigen Beispiel-Transkriptionen (Bild und Audio) in der tatsächlichen App-Oberfläche geöffnet: vollständige Noten mit Aufnahmetiming statt automatischer Reduktion.
+- Paketauflösung für Intel-macOS im Dry-run bestanden; dies ersetzt keine native Intel-Ausführung.
+- Beispiel `kcS_ZWM03-E` tatsächlich geladen und Frames gesichtet: gefilmte Klaviatur mit farbigen fallenden Noten. Electron-Abruf, drei Vorschauen, Bilderkennung und validierte Katalog-/Wiedergabefassung bestanden: 275,18 Sekunden, 1916 Ereignisse mit C4=321, C5=419, Linie=223 (720 Pixel breite Vorschau). Separater vollständiger Audio-Modelllauf: 2039 Ereignisse. Diese Zahlen sind **keine Genauigkeitsmessung** gegen eine Originalpartitur.
+- Beim Beispiel laufen Bildanschläge gegenüber den Audioanschlägen ungefähr 0,1–0,15 Sekunden vor. Dafür ist ein expliziter Bild-/Tonversatz einstellbar. Keine stille automatische Korrektur oder Rasterquantisierung.
+- Echter Bilderkennungstest: sechs bekannte Ereignisse einschließlich Polyphonie, schwarzer Taste und wiederholter Taste; Tonhöhen korrekt, Einsätze/Enden innerhalb eines Frames bei 30 fps. Expliziter Zeitversatz geprüft. Leeres und beschädigtes Video abgewiesen.
+- Echter Audiotest mit lokalen Klaviersamples: fünf Referenztöne einschließlich Dreiklang innerhalb 80 ms erkannt. Ein zusätzlicher Oberton wurde mit niedrigem Modellwert zur Kontrolle markiert. Dauern sind weniger zuverlässig als Einsätze; Pedal wird nicht als separate Pedalspur exportiert.
+
+## Musikalische Prüfung und ihre Grenze
+
+Vorher-/Nachher-MIDI und gerenderte WAVs: `test-results/jazz-quality/`, reproduzierbar über `node scripts/compare-arrangements.mjs` (vorheriger Git-Stand, gleiche Quellen und Einstellungen). Drei echte Mutopia-Stücke vorher mit `npm run verify:online` laden. Weitere Referenzen: Bruder Jakob, Ballade, Mollfolge, Walzer, 6/8 und dichte Melodie.
+
+Bei dezentem Standard sinkt die Begleitung bei Bruder Jakob von 56 auf 16 Ereignisse, bei den drei Katalogstücken von 157/140/118 auf 64/58/48. Die Prüfung umfasst außerdem erhaltene Melodietonfolge/-dynamik, Ausgangsakkorde, keine pauschalen Septimen, geringere Begleitlautstärke, unterschiedliche metrische Gruppen, Pausen und Register-/Griffbelegung. Dichte Melodie unterdrückt zusätzliche Akkordanschläge. Diese Kriterien adressieren die konkrete Überladung, beweisen jedoch **keine subjektiv bessere musikalische Wirkung**. Eine menschliche Hörabnahme bleibt ausdrücklich offen; die A/B-Hörproben liegen dafür vor.
+
+Die Bilderkennung verlangt eine feste, kalibrierte Ansicht mit gut unterscheidbaren farbigen Balken. Sie erkennt keine beliebigen Tutorialformate oder Kameraschnitte automatisch. Audio kann bei Hall, Pedal, Obertönen oder weiteren Instrumenten falsch liegen; lange Noten an Analysefenstergrenzen können verkürzt sein. Hohe Modell-/Bildwerte garantieren keine korrekten Noten. Freies Timing bleibt erhalten und kann unhandliche MusicXML-Notenwerte ergeben. Tempo/Takt sind zunächst ausdrücklich technische Hilfswerte und können zeitneutral zugeordnet werden.
+
+Die neue App wird lokal/ad hoc signiert; keine Apple-Notarisierung. Native Intel-Ausführung und physische Audio-/Bildlatenz sind weiterhin separat zu prüfen.
+
+---
+
 # Abnahme Version 2.0.1
 
 Die automatischen Ergebnisse stehen unter `test-results/`. Die Tests benutzen ein eigenes temporäres Katalogverzeichnis und verändern keine persönlichen Musikdateien.

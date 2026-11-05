@@ -1,0 +1,10 @@
+piano-transcription-inference==0.0.6
+torch==2.2.2
+numpy==1.26.4
+librosa==0.10.2.post1
+scipy==1.12.0
+torchlibrosa==0.1.0
+imageio-ffmpeg==0.6.0
+opencv-python-headless==4.10.0.84
+Pillow==11.3.0
+yt-dlp[default]==2026.10.26

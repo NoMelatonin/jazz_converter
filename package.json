@@ -1,7 +1,7 @@
 {
   "name": "jazz-converter",
   "productName": "Jazz Converter",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "Lokale Swing-Arrangements f\u00fcr zwei H\u00e4nde",
@@ -25,6 +25,7 @@
     "previews": "node scripts/listening.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "package:local": "npm run build && node scripts/package.mjs --local",
+    "test:e2e:video": "node scripts/e2e-video.mjs",
     "test:e2e:versions": "node scripts/e2e-versions.mjs"
   },
   "build": {
@@ -39,6 +40,7 @@
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": ["dist-electron/video/**"],
     "afterPack": "scripts/after-pack.cjs",
     "mac": {
       "category": "public.app-category.music",

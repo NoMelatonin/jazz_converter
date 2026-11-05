@@ -9,7 +9,7 @@ import {
 } from "./model";
 import { add, beat, cmp, end, max, sub, value } from "./time";
 import { extractMelody } from "./melody";
-import { jazzChord, type ParsedChord } from "./harmony";
+import { jazzChord, contextualChord, type ParsedChord } from "./harmony";
 import { assertPlayback, assertSong } from "./playback";
 
 function swing(melody: Note[]): Note[] {
@@ -64,7 +64,7 @@ function octavePhrases(
         Math.abs(a) - Math.abs(b) ||
         a - b,
     );
-    const shift = shifts[0];
+    const shift = low >= 21 && high <= 108 ? 0 : shifts[0];
     if (shift)
       warnings.push(
         `Melodie ab Takt ${song.bars.findLast((b) => cmp(b.start, phrase[0].start) <= 0)?.number ?? 1}: ${shift > 0 ? "+" : "−"}${Math.abs(shift) / 12} Oktave(n).`,
@@ -75,7 +75,7 @@ function octavePhrases(
         pitch: n.pitch + shift,
         hand: "right" as const,
         melody: true,
-        velocity: 102,
+        velocity: n.velocity,
       })),
     );
   }
@@ -172,23 +172,44 @@ export function violations(
 
 export function arrange(song: Song, settings: Settings): Arrangement {
   assertSong(song);
+  if (song.transcription && !song.transcription.reviewed)
+    throw new Error(
+      "Bitte zuerst die Video-Transkription anhören und die Hörkontrolle bestätigen.",
+    );
   const track = song.tracks.find((t) => t.id === settings.melodyTrackId);
   if (!track) throw new Error("Bitte eine Melodiespur auswählen.");
   if (!track.notes.length)
     throw new Error("Die gewählte Melodiestimme enthält keine hörbaren Noten.");
   if (!settings.chords.length)
     throw new Error("Bitte zuerst Akkorde ergänzen.");
-  if (settings.chords.some((c) => c.confidence < 0.2 && c.source !== "manual"))
+  if (
+    settings.chords.some(
+      (c) =>
+        c.confidence < 0.2 &&
+        c.source !== "manual" &&
+        track.notes.some(
+          (n) =>
+            cmp(n.start, add(c.at, c.duration)) < 0 && cmp(end(n), c.at) > 0,
+        ),
+    )
+  )
     throw new Error(
       "Für diese Quelle fehlen sichere Begleitdaten. Bitte die markierten Akkorde prüfen und bestätigen.",
     );
   const chords = [...settings.chords].sort((a, b) => cmp(a.at, b.at));
   for (const c of chords) jazzChord(c.symbol);
-  const adapted = octavePhrases(swing(extractMelody(track)), song);
+  const rawMelody = extractMelody(track);
+  const grid =
+    !song.transcription &&
+    !song.meters.some((m) => m.denominator === 8 && m.numerator % 3 === 0) &&
+    rawMelody.every(
+      (n) =>
+        Math.abs(value(n.start) * 2 - Math.round(value(n.start) * 2)) < 1e-6,
+    );
+  const adapted = octavePhrases(grid ? swing(rawMelody) : rawMelody, song);
   const melody = adapted.notes;
   const notes: Note[] = [...melody];
   const limits = LIMITS[settings.difficulty];
-  const medium = settings.difficulty === "medium";
   let serial = 0,
     previousRight: number[] = [],
     previousBass = 45;
@@ -213,81 +234,169 @@ export function arrange(song: Song, settings: Settings): Arrangement {
         track: hand,
       });
   }
+  const level = { gentle: 0, balanced: 1, lively: 2 }[
+    settings.intensity ?? "gentle"
+  ];
+  const typicalVelocity = [...melody].sort((a, b) => a.velocity - b.velocity)[
+    Math.floor(melody.length / 2)
+  ].velocity;
+  const quiet = Math.max(20, Math.min(66, typicalVelocity - 24 + level * 4));
   for (const bar of song.bars) {
-    const length = value(bar.duration);
-    for (let index = 0; index < Math.ceil(length); index++) {
-      const at = add(bar.start, beat(index));
-      if (cmp(at, add(bar.start, bar.duration)) >= 0) continue;
+    const barStop = add(bar.start, bar.duration),
+      length = value(bar.duration);
+    const local = melody.filter(
+      (n) => cmp(n.start, barStop) < 0 && cmp(end(n), bar.start) > 0,
+    );
+    if (!local.length) continue;
+    const first = melody[0].start,
+      last = end(melody.at(-1)!);
+    const bpm =
+      song.tempos.findLast((t) => cmp(t.at, bar.start) <= 0)?.bpm ?? 120;
+    const dense = local.length / ((length * 60) / bpm) > 5;
+    const compound = bar.denominator === 8 && bar.numerator % 3 === 0;
+    const pulse = compound ? 1.5 : 4 / bar.denominator;
+    const section = song.sections.filter(
+      (s) => cmp(s.at, bar.start) <= 0,
+    ).length;
+    const phraseEnd = melody.some(
+      (n) =>
+        cmp(n.start, bar.start) >= 0 &&
+        cmp(end(n), barStop) <= 0 &&
+        !melody.some(
+          (m) =>
+            cmp(m.start, end(n)) >= 0 && value(sub(m.start, end(n))) < 0.75,
+        ),
+    );
+    const variant = (bar.number + section) % 3;
+    // Harmonic changes are anchors even when they fall between metric beats.
+    const anchors = [
+      0,
+      ...chords
+        .filter((c) => cmp(c.at, bar.start) > 0 && cmp(c.at, barStop) < 0)
+        .map((c) => value(sub(c.at, bar.start))),
+    ];
+    if (!dense && level > 0)
+      for (let t = pulse; t < length; t += pulse) {
+        if (level === 2 || Math.round(t / pulse) % 2 === 0) anchors.push(t);
+      }
+    for (const offset of [...new Set(anchors)].sort((a, b) => a - b)) {
+      const at = add(bar.start, beat(Math.round(offset * 960), 960));
+      if (cmp(at, first) < 0 || cmp(at, last) >= 0) continue;
       const sourceChord =
         chords.findLast((c) => cmp(c.at, at) <= 0) ?? chords[0];
-      const chord = jazzChord(sourceChord.symbol);
-      if (medium || index % 2 === 0) {
-        const targetPc =
-          index === 0 || !medium
-            ? chord.bass
-            : index % 2
-              ? (chord.root + 7) % 12
-              : chord.root;
-        const options = Array.from({ length: 25 }, (_, i) => 33 + i).filter(
-          (p) => p % 12 === targetPc,
-        );
-        options.sort(
-          (a, b) =>
-            Math.abs(a - previousBass) - Math.abs(b - previousBass) || a - b,
-        );
-        const bass = options[0] ?? 45;
+      const next = chords.find((c) => cmp(c.at, at) > 0);
+      const harmonicEnd = next?.at ?? song.duration;
+      const chord = contextualChord(
+        sourceChord.symbol,
+        local,
+        next?.symbol,
+        sourceChord.confidence,
+      );
+      const sounding = local.filter(
+        (n) => cmp(n.start, add(at, beat(1))) < 0 && cmp(end(n), at) > 0,
+      );
+      const melodyLow = sounding.length
+        ? Math.min(...sounding.map((n) => n.pitch))
+        : 72;
+      const bassOptions = Array.from({ length: 25 }, (_, i) => 33 + i).filter(
+        (p) => p % 12 === chord.bass && p < melodyLow - 7,
+      );
+      bassOptions.sort(
+        (a, b) =>
+          Math.abs(a - previousBass) - Math.abs(b - previousBass) || a - b,
+      );
+      if (bassOptions.length) {
+        const bass = bassOptions[0];
         previousBass = bass;
-        let duration = beat(medium ? 4 : 3, medium ? 5 : 4);
-        const harmonicEnd = add(sourceChord.at, sourceChord.duration);
-        const barEnd = add(bar.start, bar.duration);
-        if (cmp(add(at, duration), harmonicEnd) > 0)
-          duration = sub(harmonicEnd, at);
-        if (cmp(add(at, duration), barEnd) > 0) duration = sub(barEnd, at);
-        addNote(bass, at, duration, "left", 76);
-        if (!medium && index === 0) {
-          const fifth = bass + 7;
-          if (fifth <= 60) addNote(fifth, at, duration, "left", 62);
-        }
-        if (medium && index % 2 === 1) {
-          const shell = voicing(chord, 2, bass + 2, bass + 12, 12, []);
-          for (const p of shell)
-            if (p !== bass)
-              addNote(
-                p,
-                at,
-                cmp(duration, beat(1, 3)) < 0 ? duration : beat(1, 3),
-                "left",
-                58,
-              );
-        }
+        const duration = beat(
+          Math.round(
+            Math.min(
+              value(sub(harmonicEnd, at)),
+              value(sub(barStop, at)),
+              pulse * (dense ? 0.65 : 0.85),
+            ) * 960,
+          ),
+          960,
+        );
+        addNote(bass, at, duration, "left", quiet);
       }
-      if (index % 2 === 1 || (medium && index === 0)) {
-        const compAt = medium ? add(at, beat(2, 3)) : at;
-        if (cmp(compAt, add(bar.start, bar.duration)) >= 0) continue;
-        const compChord = jazzChord(
-          (chords.findLast((c) => cmp(c.at, compAt) <= 0) ?? chords[0]).symbol,
-        );
-        let stop = add(compAt, beat(1, 3));
-        const sounding = melody.filter(
-          (n) => cmp(n.start, stop) < 0 && cmp(end(n), compAt) > 0,
-        );
-        const pitches = sounding.map((n) => n.pitch);
-        const minMelody = pitches.length ? Math.min(...pitches) : 76;
-        const maxMelody = pitches.length ? Math.max(...pitches) : 76;
-        const nextChord = chords.find((c) => cmp(c.at, compAt) > 0);
-        if (nextChord && cmp(stop, nextChord.at) > 0) stop = nextChord.at;
-        // Include every melody pitch sounding during the grip, not only its first note.
-        const grip = voicing(
-          compChord,
-          limits.right - (sounding.length ? 1 : 0),
-          Math.max(48, maxMelody - limits.span),
-          minMelody - 1,
-          limits.span,
-          previousRight,
-        );
-        previousRight = grip;
-        for (const p of grip)
-          addNote(p, compAt, sub(stop, compAt), "right", 64);
+    }
+    // Short shells breathe around melodic activity; no compulsory offbeat chord.
+    const offsets = dense
+      ? []
+      : level === 0
+        ? [variant === 0 ? pulse : Math.min(pulse * 2, length - pulse)]
+        : level === 1
+          ? [pulse, pulse * 2 + (variant === 1 ? pulse / 2 : 0)]
+          : [0, pulse, pulse * 2, pulse * 3];
+    for (const offset of [...new Set(offsets)]) {
+      if (
+        offset < 0 ||
+        offset >= length ||
+        (phraseEnd && offset > length - pulse)
+      )
+        continue;
+      const at = add(bar.start, beat(Math.round(offset * 960), 960));
+      if (cmp(at, first) < 0 || cmp(at, last) >= 0) continue;
+      const source = chords.findLast((c) => cmp(c.at, at) <= 0) ?? chords[0],
+        next = chords.find((c) => cmp(c.at, at) > 0);
+      let stop = add(at, beat(1, 3));
+      if (cmp(stop, barStop) > 0) stop = barStop;
+      if (next && cmp(stop, next.at) > 0) stop = next.at;
+      const sounding = melody.filter(
+        (n) => cmp(n.start, stop) < 0 && cmp(end(n), at) > 0,
+      );
+      const pitches = sounding.map((n) => n.pitch),
+        lo = pitches.length ? Math.min(...pitches) : 76,
+        hi = pitches.length ? Math.max(...pitches) : 76;
+      const chord = contextualChord(
+        source.symbol,
+        sounding,
+        next?.symbol,
+        source.confidence,
+      );
+      const grip = voicing(
+        chord,
+        Math.min(level === 0 ? 1 : 2, limits.right - sounding.length),
+        Math.max(48, hi - limits.span),
+        lo - 3,
+        limits.span,
+        previousRight,
+      );
+      previousRight = grip;
+      const compHand = grip.length ? ("right" as const) : ("left" as const);
+      const tones = grip.length
+        ? grip
+        : voicing(
+            chord,
+            1,
+            previousBass + 2,
+            Math.min(previousBass + limits.span, lo - 10),
+            limits.span,
+            [],
+          );
+      for (const p of tones) {
+        const candidate: Note = {
+          id: `check-${serial}`,
+          pitch: p,
+          start: at,
+          duration: sub(stop, at),
+          hand: compHand,
+          velocity: quiet - 6,
+          track: "right",
+        };
+        if (
+          !violations(
+            [
+              ...notes.filter(
+                (n) => cmp(n.start, stop) < 0 && cmp(end(n), at) > 0,
+              ),
+              candidate,
+            ],
+            settings.difficulty,
+          ).length
+        )
+          addNote(p, at, sub(stop, at), compHand, quiet - 6);
       }
     }
   }
@@ -315,7 +424,15 @@ export function arrange(song: Song, settings: Settings): Arrangement {
     meters: song.meters,
     sections: song.sections,
     duration: song.duration,
-    warnings: adapted.warnings,
+    warnings: [
+      ...song.warnings,
+      ...adapted.warnings,
+      ...(chords.some((c) => c.source === "inferred" && c.confidence < 0.65)
+        ? [
+            "Unsicher abgeleitete Akkorde: vor der Übernahme anhören und bei Bedarf korrigieren.",
+          ]
+        : []),
+    ],
   };
   assertPlayback(output);
   return output;

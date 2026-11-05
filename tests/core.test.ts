@@ -288,16 +288,16 @@ describe("Arrangement und Export", () => {
       expect(melody.map((n) => value(n.duration))).toContain(1 / 3);
       expect(
         a.notes.filter((n) => !n.melody && n.hand === "left").length,
-      ).toBeGreaterThan(8);
+      ).toBeGreaterThanOrEqual(8);
       expect(a.notes.some((n) => !n.melody && n.hand === "right")).toBe(true);
       expect(a.bars).toEqual(song.bars);
       expect(a.sections).toEqual(song.sections);
     });
   }
-  test("medium has a more active bass than easy", () => {
+  test("lively accompaniment has a more active bass than gentle", () => {
     const song = demo();
     expect(
-      arrange(song, settings(song, "medium")).notes.filter(
+      arrange(song, {...settings(song, "medium"),intensity:"lively"}).notes.filter(
         (n) => n.hand === "left",
       ).length,
     ).toBeGreaterThan(

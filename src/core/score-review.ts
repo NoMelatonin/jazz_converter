@@ -28,6 +28,12 @@ const note = z.object({
   source,
   hand: z.enum(["left", "right"]).optional(),
   melody: z.boolean().optional(),
+  recognition: z
+    .object({
+      score: z.number().min(0).max(1),
+      method: z.enum(["visual", "audio"]),
+    })
+    .optional(),
   sourceIds: z.array(z.string().max(256)).max(200).optional(),
 });
 const rest = z.object({

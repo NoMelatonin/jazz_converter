@@ -1,3 +1,4 @@
+import type { VideoJob, VideoTools, Calibration } from "./core/video";
 import type {
   Arrangement,
   CatalogEntry,
@@ -12,6 +13,24 @@ import type {
   PlaybackRequest,
 } from "./core/model";
 export interface JazzApi {
+  videoMeter(
+    id: string,
+    bpm: number,
+    numerator: number,
+    denominator: number,
+  ): Promise<CatalogSong>;
+  videoTools(): Promise<VideoTools>;
+  videoSetup(): Promise<VideoJob>;
+  videoPick(): Promise<string | null>;
+  videoPrepare(input: { url?: string; file?: string }): Promise<VideoJob>;
+  videoStatus(id: string): Promise<VideoJob>;
+  videoCancel(id: string): Promise<VideoJob>;
+  videoTranscribe(
+    id: string,
+    method: "audio" | "visual",
+    calibration?: Calibration,
+  ): Promise<VideoJob>;
+
   list(): Promise<CatalogEntry[]>;
   load(id: string): Promise<CatalogSong>;
   openFiles(): Promise<(CatalogSong | PdfDocument)[]>;

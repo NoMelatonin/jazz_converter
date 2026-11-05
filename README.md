@@ -8,8 +8,8 @@ Lokale macOS-App mit deutscher Oberfläche: PDF-Notenblätter, MIDI oder MusicXM
 
 Voraussetzung: macOS 14 oder neuer.
 
-- **Apple Silicon (M1 und neuer):** `release/Jazz Converter-2.0.1-arm64.dmg`
-- **Intel:** `release/Jazz Converter-2.0.1.dmg`
+- **Apple Silicon (M1 und neuer):** `release/Jazz Converter-2.1.0-arm64.dmg`
+- **Intel:** `release/Jazz Converter-2.1.0.dmg`
 
 DMG öffnen, **Jazz Converter** nach **Programme** ziehen und starten. Die App ist lokal/ad hoc signiert und nicht Apple-notarisiert. Bei einer macOS-Sperre den Start unter **Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen** bestätigen. Keine Sicherheitseinstellungen dauerhaft abschalten.
 
@@ -49,6 +49,25 @@ Die Reduktion verfolgt die Melodie taktweise, auch bei Instrumentwechsel, und ü
 
 Notenerkennung ist fehlbar. Die Referenztests enthalten auch PDFs mit tatsächlich falsch gelesenen Taktzeichen; die daraus entstehenden überfüllten Takte werden erkannt und zur Prüfung angehalten. Nicht jeder falsche Einzelton lässt sich automatisch erkennen. Original-PDF und rohes Erkennungsergebnis bleiben erhalten. MusicXML exportiert die normalisierte Musik, während das ursprüngliche Drucklayout im PDF bleibt.
 
+## Video → bearbeitbare Klaviernoten (2.1.0)
+
+1. **Video importieren → Lokale Videoverarbeitung einrichten**. Einmalig ungefähr 500 MB Internetdownload, mindestens 3 GB freier Platz. Das Modell allein belegt 172 MB; mit Laufzeit und Installationscache waren es im Test rund 2,1 GB. Kein Python-Terminal, Konto, API-Schlüssel oder kostenpflichtiger Dienst erforderlich.
+2. YouTube-Link laden oder **Lokale Videodatei öffnen** wählen. Unterstützt: MP4, MOV, MKV, WebM, maximal 2 GB / 30 Minuten; einzelne YouTube-Videos, keine Playlists oder Livestreams. Bei privaten, gesperrten oder anmeldungsgebundenen Quellen eine rechtmäßig vorliegende lokale Datei nutzen.
+3. Drei Vorschaubilder prüfen. Für normale Klavieraufnahmen **Audio** wählen. Für feste Ansichten mit farbigen fallenden Noten **Bild** wählen und im Bild C4, C5 sowie die Anschlaglinie unmittelbar oberhalb der Tasten markieren. Die Referenzen müssen die wirklichen Tonhöhen bezeichnen. Ein optionaler Bild-/Tonversatz korrigiert vorlaufende Balken (positiv = späterer Einsatz). Kamerafahrten, Perspektivwechsel und wechselnde Klaviaturen sind für diese Bilderkennung ungeeignet.
+4. **Transkribieren**. Fortschritt und Abbrechen stehen beim Laden, Einrichten und Erkennen zur Verfügung. Nach erfolgreicher Validierung wird eine neue **Transkription des Videos** gespeichert. **Transkription anhören und prüfen** öffnet die vollständigen erkannten Noten, ohne automatische Reduktion.
+5. **Noten prüfen** erlaubt Tonhöhen, Beginn und Dauer zu korrigieren. Niedrige Erkennungswerte werden markiert; hohe Werte garantieren keine Richtigkeit. **MIDI speichern** und **MusicXML speichern** exportieren dieselbe gespeicherte Fassung wie der Player.
+6. Vor Jazzumwandlung die Hörkontrolle bestätigen. Für eine passende Begleitung bei Bedarf **Tempo der Begleitung / Taktmaß → Zeitbasis zuordnen** verwenden: Dies setzt ein metrisches Raster, erhält aber die absoluten Aufnahmezeiten. Automatische Achtel-Swingverschiebung ist für Videotranskriptionen ausgeschaltet.
+
+Die erste Zeitbasis ist 60 BPM / 4/4: ein technisches Sekundenraster, **kein erkanntes Tempo oder Taktmaß**. Es wird nicht quantisiert. Der Export erhält Zeiten auf Millisekundenbasis beziehungsweise beim MIDI-Export innerhalb eines 960stel Viertels. Freies Timing kann im MusicXML ungewöhnliche Notenwerte ergeben.
+
+Die lokale Audioerkennung verwendet Kong et al. CRNN (CPU). Pedal, Hall, Obertöne und andere Instrumente können falsche/fehlende Noten und ungenaue Dauern verursachen; lange Noten können an Analysegrenzen verkürzt werden. Bildanalyse schätzt Lautstärken, kann gleichfarbige Wiederholungen ohne Lücke zusammenfassen und erkennt keine beliebigen Videoformate automatisch. Die drei Vorschauen ersetzen keine Kontrolle auf Bildschnitte. Keine Methode liefert eine garantiert fehlerfreie oder offiziell originale Partitur.
+
+Download und Einrichtung sind wiederholbar; fertige, geprüfte Komponenten werden wiederverwendet. Angebrochene Downloads beginnen erneut. Lokale Datei-Transkription funktioniert nach der Einrichtung offline. YouTube-Verfügbarkeit kann sich ändern. Quellenrechte werden nicht aus der öffentlichen Erreichbarkeit abgeleitet.
+
+**Jazzbegleitung** bietet **Dezent** (Standard), **Ausgewogen** und **Lebendig**, unabhängig von der Griffschwierigkeit. Die Engine erhält Ausgangsakkorde und Melodiedynamik, ergänzt Septimen nur bei kontextueller Eignung und nimmt bei dichter Melodie Begleitung zurück. Unsichere abgeleitete Akkorde bleiben zur Korrektur markiert.
+
+Technik und Lizenzen: [Video-Komponenten](scripts/video/NOTICE.md). Private Laufzeit unter `video-runtime-v1/`, Auftragscache unter `video-jobs/` im App-Datenverzeichnis. Bei der Videoverarbeitung werden keine Cloudmodelle verwendet.
+
 ## Spielbarkeit und Export
 
 | Stufe   | Griffweite je Hand           | Links gleichzeitig | Rechts gleichzeitig |
@@ -86,7 +105,7 @@ MIDI Typ 0/1 mit musikalischer Zeitbasis wird unterstützt. Typ 2, SMPTE-MIDI un
 
 MusicXML unterstützt Partwise/Timewise, MXL-Container, Stimmen, Pausen, Auftakte, Bindungen, Tempo-/Taktwechsel und normale Wiederholungen einschließlich erster/zweiter Endungen. Standard-DTD-Verweise werden ohne Netzwerkzugriff ignoriert; interne DTD-Entitäten werden abgewiesen. Vorschlagsnoten, D.C./D.S./Coda und veränderte Akkorderweiterungen müssen vorher ausgeschrieben beziehungsweise vereinfacht oder als MIDI importiert werden. Für solche Fälle gibt es Fehlermeldungen statt einer stillen musikalischen Änderung.
 
-Bei der PDF-Erkennung werden einige nicht unterstützte Schreibweisen als Prüfstellen übernommen; die Prüfung muss dann das beabsichtigte Ergebnis herstellen. Handschrift, stark verzerrte Fotos, Spracheingabe und MP3-Transkription werden nicht unterstützt. Die automatische Melodieverfolgung und Harmonisierung sind regelbasierte Vorschläge; Hörprobe und Korrekturmöglichkeit sind bei fremden Dateien wesentlich.
+Bei der PDF-Erkennung werden einige nicht unterstützte Schreibweisen als Prüfstellen übernommen; die Prüfung muss dann das beabsichtigte Ergebnis herstellen. Handschrift, stark verzerrte Fotos, Spracheingabe und direkter MP3-Dateiimport werden nicht unterstützt. Klavieraudio in Videodateien kann über den Videoimport transkribiert werden. Die automatische Melodieverfolgung und Harmonisierung sind regelbasierte Vorschläge; Hörprobe und Korrekturmöglichkeit sind bei fremden Dateien wesentlich.
 
 ## Entwicklung
 
@@ -104,6 +123,8 @@ Die Klaviersamples und Lizenztexte sind bereits im Repository enthalten. Die lau
 npm test                 # Import, musikalische Regeln, Export und Transport
 npm run build            # Typprüfung, Lizenztexte und Produktionsbuild
 npm run test:e2e         # echte Electron-App, vollständig offline
+npm run test:e2e:video    # echte Bild-/Audiotranskription; lokale Einrichtung und Testvideo erforderlich
+node scripts/compare-arrangements.mjs # MIDI/WAV-Vergleich mit vorherigem Git-Stand
 npm run test:e2e:versions # Fassungszuordnung, Altbestand, Fehler und hörbare Wiedergabe
 npm run test:e2e:pdf     # PDF-Vorschau, echte OMR, Korrektur und beide Exporte
 npm run verify:pdf       # Referenzpartituren, Scans und blockierte Erkennungsfehler

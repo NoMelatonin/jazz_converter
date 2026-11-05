@@ -1,4 +1,5 @@
-import type { Beat, Chord, Song } from "./model";
+import type { Beat, Chord, Song, Note } from "./model";
+import { extractMelody } from "./melody";
 import { add, beat, cmp, end, sub, value } from "./time";
 const ROOTS: Record<string, number> = {
   C: 0,
@@ -68,24 +69,52 @@ export function jazzChord(symbol: string): ParsedChord {
     throw new Error(
       `Ungültiger Akkord „${symbol}“. Beispiele: C, Am7, G7, Fmaj7, Dm7/G.`,
     );
-  if (parsed.quality) {
-    if (parsed.quality === "m") return { ...parsed, intervals: [0, 3, 7, 10] };
-    return parsed;
-  }
-  return { ...parsed, intervals: [0, 4, 7, 11] };
+  return parsed;
 }
 
-function infer(
+/** Add colour only with affirmative functional evidence; source symbols remain untouched. */
+export function contextualChord(
+  symbol: string,
+  melody: Note[],
+  next?: string,
+  confidence = 1,
+): ParsedChord {
+  const chord = jazzChord(symbol);
+  if (chord.quality || confidence < 0.65) return chord;
+  const following = next ? parseChord(next) : undefined;
+  // Dominant resolving down a fifth: minor seventh. A tonic maj7 needs the
+  // seventh already present in the melody; a scale guess is insufficient.
+  const extension =
+    following && (chord.root + 5) % 12 === following.root
+      ? 10
+      : melody.some((n) => (n.pitch - chord.root + 120) % 12 === 11)
+        ? 11
+        : undefined;
+  if (extension === undefined) return chord;
+  const pc = (chord.root + extension) % 12;
+  if (melody.some((n) => [1, 11].includes((n.pitch - pc + 120) % 12)))
+    return chord;
+  return { ...chord, intervals: [...chord.intervals, extension] };
+}
+
+function inferCandidates(
   song: Song,
   trackId: string,
   at: Beat,
   duration: Beat,
   id: string,
-): Chord {
+): (Chord & { score: number })[] {
+  const selected = song.tracks.find((t) => t.id === trackId);
+  const melodyIds = new Set(
+    selected ? extractMelody(selected).map((n) => n.id) : [],
+  );
   const stop = add(at, duration),
-    accompaniment = song.tracks
-      .filter((t) => t.id !== trackId)
+    otherTracks = song.tracks
+      .filter((t) => t.id !== trackId && !t.percussion && t.channel !== 9)
       .flatMap((t) => t.notes);
+  const accompaniment = otherTracks.length
+    ? otherTracks
+    : (selected?.notes.filter((n) => !melodyIds.has(n.id)) ?? []);
   const notes = (
     accompaniment.length ? accompaniment : song.tracks.flatMap((t) => t.notes)
   ).filter((n) => cmp(n.start, stop) < 0 && cmp(end(n), at) > 0);
@@ -107,7 +136,7 @@ function infer(
   const sum = chroma.reduce((a, b) => a + b, 0) || 1;
   const candidates = [];
   for (let root = 0; root < 12; root++)
-    for (const quality of ["", "m", "dim"]) {
+    for (const quality of ["", "m", "dim", "7", "maj7", "m7", "sus4", "6"]) {
       const chord = parseChord(PITCH_NAMES[root] + quality)!;
       const coverage =
         chord.intervals.reduce((s, p) => s + chroma[(root + p) % 12], 0) / sum;
@@ -120,7 +149,7 @@ function infer(
           : chord.intervals.some((p) => (root + p) % 12 === bassPc)
             ? 0.04
             : 0;
-      const score = coverage + bass - (3 - present) * 0.08;
+      const score = coverage + bass - (chord.intervals.length - present) * 0.12;
       candidates.push({
         symbol: PITCH_NAMES[root] + quality,
         score,
@@ -137,14 +166,15 @@ function infer(
     !accompaniment.length || best.present < 2
       ? 0.1
       : Math.min(0.98, best.coverage * 0.45 + Math.max(0, margin) * 2);
-  return {
+  return candidates.slice(0, 5).map((c) => ({
     id,
     at,
     duration,
-    symbol: notes.length ? best.symbol : PITCH_NAMES[song.key?.root ?? 0],
+    symbol: notes.length ? c.symbol : PITCH_NAMES[song.key?.root ?? 0],
     confidence,
-    source: "inferred",
-  };
+    source: "inferred" as const,
+    score: c.score,
+  }));
 }
 
 export function chordsFor(song: Song, trackId: string): Chord[] {
@@ -157,13 +187,44 @@ export function chordsFor(song: Song, trackId: string): Chord[] {
     .filter((b) => cmp(b, beat(0)) >= 0 && cmp(b, song.duration) <= 0)
     .sort(cmp)
     .filter((b, i, a) => !i || cmp(b, a[i - 1]) !== 0);
-  return boundaries.slice(0, -1).map((at, i) => {
+  const choices = boundaries.slice(0, -1).map((at, i) => {
     const duration = sub(boundaries[i + 1], at);
     const provided = song.chords.find(
       (c) => cmp(c.at, at) <= 0 && cmp(add(c.at, c.duration), at) > 0,
     );
     return provided
-      ? { ...provided, id: `chord-${i}`, at, duration }
-      : infer(song, trackId, at, duration, `chord-${i}`);
+      ? [{ ...provided, id: `chord-${i}`, at, duration, score: 2 }]
+      : inferCandidates(song, trackId, at, duration, `chord-${i}`);
   });
+  type Path = { cost: number; chord?: Chord; previous?: Path };
+  let paths: Path[] = [{ cost: 0 }];
+  for (const options of choices)
+    paths = options.map(
+      (c) =>
+        paths
+          .map((p) => {
+            const r = parseChord(c.symbol)!.root,
+              prev = p.chord && parseChord(p.chord.symbol)!.root;
+            const transition =
+              prev === undefined || prev === r
+                ? 0
+                : (prev + 5) % 12 === r
+                  ? 0.015
+                  : 0.06;
+            return {
+              cost: p.cost - c.score + transition,
+              chord: c,
+              previous: p,
+            };
+          })
+          .sort((a, b) => a.cost - b.cost)[0],
+    );
+  const result: Chord[] = [];
+  let cursor: Path | undefined = paths.sort((a, b) => a.cost - b.cost)[0];
+  while (cursor?.chord) {
+    const { score: _, ...c } = cursor.chord as Chord & { score: number };
+    result.push(c);
+    cursor = cursor.previous;
+  }
+  return result.reverse();
 }

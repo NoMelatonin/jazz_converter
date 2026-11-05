@@ -16,6 +16,7 @@ export interface Note {
   writtenPitch?: number;
   source?: SourceRef;
   sourceIds?: string[];
+  recognition?: { score: number; method: "visual" | "audio" };
 }
 export interface SourceRef {
   page?: number;
@@ -117,10 +118,18 @@ export interface Song {
   issues?: ReviewIssue[];
   pdf?: PdfSource;
   schemaVersion?: number;
+  transcription?: {
+    source: string;
+    method: "visual" | "audio";
+    model: string;
+    timing: "performance";
+    reviewed: boolean;
+  };
 }
 export interface Settings {
   style: "swing";
   difficulty: Difficulty;
+  intensity?: "gentle" | "balanced" | "lively";
   melodyTrackId: string;
   chords: Chord[];
   mode?: "original" | "reduction" | "swing";
@@ -204,7 +213,7 @@ export interface PdfJob {
   results?: CatalogSong[];
   error?: string;
 }
-export const ENGINE_VERSION = "2.0.1";
+export const ENGINE_VERSION = "2.1.0";
 export const LIMITS = {
   easy: { span: 7, left: 2, right: 3 },
   medium: { span: 12, left: 3, right: 4 },

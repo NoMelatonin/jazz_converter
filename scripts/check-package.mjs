@@ -31,6 +31,7 @@ for (const arch of ["arm64", "x64"]) {
         "scripts/e2e.mjs",
         "scripts/e2e-pdf.mjs",
         "scripts/e2e-versions.mjs",
+        "scripts/e2e-video.mjs",
       ]) {
         const result = await run(process.execPath, [script], {
           env: {

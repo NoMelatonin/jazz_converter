@@ -20,6 +20,8 @@ import {
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import { transcriptionMeter } from "../src/core/transcription";
+import { VideoService } from "./video-service";
 import { PdfService } from "./pdf-service";
 import { PlaybackStore, sourceRevision } from "./playback-store";
 import { assertSong, playbackError } from "../src/core/playback";
@@ -54,6 +56,7 @@ if (process.env.JAZZ_DATA_DIR)
 let win: BrowserWindow;
 let worker: Worker | undefined;
 let pdfService: PdfService;
+let videoService: VideoService;
 let playbackStore: PlaybackStore;
 const writes = new Map<string, Promise<unknown>>();
 async function catalogWrite<T>(
@@ -135,6 +138,7 @@ const settingsSchema = z.object({
   style: z.literal("swing"),
   mode: z.enum(["original", "reduction", "swing"]).optional(),
   difficulty: z.enum(["easy", "medium"]),
+  intensity: z.enum(["gentle", "balanced", "lively"]).optional(),
   melodyTrackId: z.string().min(1).max(200),
   chords: z
     .array(
@@ -367,6 +371,35 @@ app
         return load(id);
       },
     );
+    videoService = new VideoService(
+      app.getPath("userData"),
+      app.isPackaged ? path.join(process.resourcesPath,"app.asar.unpacked","dist-electron","video") : path.join(__dirname, "video"),
+      async (song, id) =>
+        catalogWrite(id, async () => {
+          try {
+            return await load(id);
+          } catch (e: any) {
+            if (e.code !== "ENOENT") throw e;
+          }
+          song.id = id;
+          assertSong(song);
+          const record: CatalogSong = {
+            entry: {
+              id,
+              title: song.title,
+              artist: song.artist,
+              format: "Video",
+              source: song.transcription!.source,
+              license: "Videoquelle · Rechte nicht automatisch festgestellt",
+              version: "Transkription des Videos",
+              importedAt: new Date().toISOString(),
+            },
+            song,
+          };
+          await atomicJson(path.join(store(), `${id}.json`), record);
+          return load(id);
+        }),
+    );
     await pdfService.init();
     await importBytes(demoXml(), "Bruder Jakob.musicxml", {
       version: "Demo · Melodie mit Akkorden",
@@ -444,6 +477,62 @@ app
       if (!url.startsWith(dev ? `${dev}/` : "jazz://app/"))
         event.preventDefault();
     });
+    handle("video:meter", async (id, bpm, numerator, denominator) =>
+      catalogWrite(id, async () => {
+        const record = await load(id);
+        record.song = transcriptionMeter(
+          record.song,
+          z.number().parse(bpm),
+          z.number().parse(numerator),
+          z.number().parse(denominator),
+        );
+        delete record.settings;
+        await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
+        return load(id);
+      }),
+    );
+    handle("video:tools", () => videoService.tools());
+    handle("video:setup", () => videoService.setup());
+    handle("video:pick", async () => {
+      const result = await dialog.showOpenDialog(win, {
+        title: "Klaviervideo öffnen",
+        properties: ["openFile"],
+        filters: [{ name: "Video", extensions: ["mp4", "mov", "mkv", "webm"] }],
+      });
+      return result.canceled ? null : result.filePaths[0];
+    });
+    handle("video:prepare", async (input) =>
+      videoService.prepare(
+        z
+          .object({
+            url: z.string().max(2048).optional(),
+            file: z.string().max(4096).optional(),
+          })
+          .parse(input),
+      ),
+    );
+    handle("video:status", async (id) =>
+      videoService.status(z.string().uuid().parse(id)),
+    );
+    handle("video:cancel", async (id) =>
+      videoService.cancel(z.string().uuid().parse(id)),
+    );
+    handle("video:transcribe", async (id, method, calibration) =>
+      videoService.transcribe(
+        z.string().uuid().parse(id),
+        z.enum(["audio", "visual"]).parse(method),
+        calibration === undefined
+          ? undefined
+          : z
+              .object({
+                c4: z.number().min(0).max(720),
+                c5: z.number().min(0).max(720),
+                line: z.number().min(4).max(1280),
+                offsetMs: z.number().min(-1000).max(1000).optional(),
+              })
+              .parse(calibration),
+      ),
+    );
     handle("catalog:list", list);
     handle("catalog:load", load);
     handle("chords:analyze", async (id, input) => {
@@ -659,6 +748,9 @@ app
           ...record.song,
           ...corrected,
           issues: [],
+          transcription: record.song.transcription
+            ? { ...record.song.transcription, reviewed: true }
+            : undefined,
           pdf: record.song.pdf
             ? { ...record.song.pdf, reviewed: true }
             : undefined,
@@ -681,6 +773,7 @@ app
   });
 app.on("window-all-closed", () => {
   pdfService?.shutdown();
+  videoService?.shutdown();
   void worker?.terminate();
   app.quit();
 });

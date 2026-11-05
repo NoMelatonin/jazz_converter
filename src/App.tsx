@@ -44,11 +44,15 @@ import { extractMelody } from "./core/melody";
 import { sourceMelody } from "./core/piano";
 import { cmp, value } from "./core/time";
 import { Player } from "./components/Player";
+import { VideoImport } from "./components/VideoImport";
 import { PdfImport } from "./components/PdfImport";
 import { ScoreWorkspace } from "./components/ScoreWorkspace";
 
 type Page = "library" | "online";
 export function App() {
+  const [videoImport, setVideoImport] = useState(false);
+  const [intensity, setIntensity] =
+    useState<NonNullable<Settings["intensity"]>>("gentle");
   const selection = useRef(0);
   const taskRunning = useRef(false);
   const [entries, setEntries] = useState<CatalogEntry[]>([]),
@@ -116,13 +120,14 @@ export function App() {
     if (token !== selection.current) return;
     setRecord(next);
     setPdfDocument(null);
-    setScoreMode(!!next.song.pdf);
+    setScoreMode(!!next.song.pdf || !!next.song.transcription);
     setArrangement(null);
     setPreview(null);
     setShowChords(false);
     setConfirmed(next.song.tracks.length === 1 || !!next.settings);
     setTrackId(id);
     setDifficulty(next.settings?.difficulty ?? "easy");
+    setIntensity(next.settings?.intensity ?? "gentle");
     setChords(inferredChords);
     setRangeFrom(1);
     setRangeTo(1);
@@ -176,6 +181,7 @@ export function App() {
   const settings = (): Settings => ({
     style: "swing",
     difficulty,
+    intensity,
     melodyTrackId: trackId,
     chords,
   });
@@ -320,6 +326,9 @@ export function App() {
             <FolderOpen size={20} />
             Datei öffnen
           </button>
+          <button className="nav-item" onClick={() => setVideoImport(true)}>
+            Video importieren
+          </button>
         </nav>
         <div className="sidebar-tip">
           <span className="tiny-piano">♪</span>
@@ -343,7 +352,7 @@ export function App() {
             <i />
             Lokal auf deinem Mac
           </div>
-          <span className="app-version">VERSION 2.0.1 · PIANO & SWING</span>
+          <span className="app-version">VERSION 2.1.0 · PIANO & SWING</span>
         </div>
       </aside>
       <main>
@@ -363,6 +372,16 @@ export function App() {
           </span>
         </header>
         <div className="main-content">
+          {videoImport && (
+            <VideoImport
+              onClose={() => setVideoImport(false)}
+              onImported={async (next) => {
+                setVideoImport(false);
+                await refresh();
+                await selectRecord(next);
+              }}
+            />
+          )}
           <div className="steps" aria-label="Fortschritt">
             {[
               "Song auswählen",
@@ -665,7 +684,7 @@ export function App() {
                   key={record.entry.id}
                   record={record}
                   onReady={setArrangement}
-                  onUpdated={(next) => void selectRecord(next)}
+                  onUpdated={selectRecord}
                   onSwing={() => {
                     setScoreMode(false);
                     setConfirmed(true);
@@ -806,6 +825,29 @@ export function App() {
                         </span>
                       </div>
                       <div className="difficulty">
+                        <label>
+                          Jazzbegleitung
+                          <select
+                            aria-label="Jazzbegleitung"
+                            value={intensity}
+                            onChange={(e) => {
+                              setIntensity(
+                                e.target.value as NonNullable<
+                                  Settings["intensity"]
+                                >,
+                              );
+                              setArrangement(null);
+                            }}
+                          >
+                            <option value="gentle">
+                              Dezent · viel Raum für die Melodie
+                            </option>
+                            <option value="balanced">Ausgewogen</option>
+                            <option value="lively">
+                              Lebendig · mehr Bewegung
+                            </option>
+                          </select>
+                        </label>
                         <span className="eyebrow">DEIN SPIELNIVEAU</span>
                         <div className="difficulty-options">
                           {(["easy", "medium"] as const).map((d) => (
@@ -831,7 +873,7 @@ export function App() {
                               <p>
                                 {d === "easy"
                                   ? "Ruhiger Bass, kompakte Griffe."
-                                  : "Bewegter Bass, vollere Akkorde."}
+                                  : "Mehr Raum für fließende Akkordlagen."}
                               </p>
                               <small>
                                 {d === "easy"

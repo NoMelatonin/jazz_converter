@@ -36,15 +36,27 @@ async function open(name) {
   await page.getByLabel("PDF-Seiten auswählen").waitFor();
 }
 async function recognize() {
+  console.log(
+    "PDF page selection:",
+    JSON.stringify(await page.getByLabel("PDF-Seiten auswählen").inputValue()),
+  );
   await page
     .getByRole("button", { name: "Noten erkennen", exact: true })
     .click();
-  await page
-    .getByText(
-      /Originalnoten erhalten\.|Klavierfassung bereit\.|Noten prüfen und korrigieren/,
-    )
-    .first()
-    .waitFor({ timeout: 180000 });
+  await Promise.race([
+    page
+      .getByText(
+        /Originalnoten erhalten\.|Klavierfassung bereit\.|Noten prüfen und korrigieren/,
+      )
+      .first()
+      .waitFor({ timeout: 180000 }),
+    page
+      .getByRole("alert")
+      .waitFor({ timeout: 180000 })
+      .then(async () => {
+        throw new Error(await page.getByRole("alert").innerText());
+      }),
+  ]);
 }
 async function save(button, file) {
   await app.evaluate(

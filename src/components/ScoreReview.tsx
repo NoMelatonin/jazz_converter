@@ -383,6 +383,17 @@ export function ScoreReview({
                             }
                           />
                         )}
+                        {"recognition" in n &&
+                        typeof n.recognition === "object" &&
+                        n.recognition !== null &&
+                        "score" in n.recognition &&
+                        typeof n.recognition.score === "number" ? (
+                          <small className="inline-hint">
+                            {n.recognition.score < 0.65 ? "Prüfen · " : ""}
+                            {Math.round(n.recognition.score * 100)}%
+                            Erkennungswert
+                          </small>
+                        ) : null}
                       </td>
                       <td>
                         <input

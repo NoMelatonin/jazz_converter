@@ -1639,3 +1639,12 @@ select {
     font-size: 10px;
   }
 }
+
+.video-import { padding:24px; margin-bottom:24px; }
+.video-import label { display:block; margin:16px 0; }
+.video-import input { width:100%; padding:12px; }
+.video-import select { display:block; padding:10px; max-width:100%; }
+.video-calibration { position:relative; width:min(720px,100%); margin:16px 0; }
+.video-calibration img { width:100%; display:block; cursor:crosshair; }
+.video-line { position:absolute; left:0;right:0;border-top:2px solid #ff8844;pointer-events:none; }
+.video-import progress { width:70%; margin-right:16px; }

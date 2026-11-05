@@ -6,6 +6,16 @@ async function call<T>(method: string, ...args: unknown[]): Promise<T> {
   return reply.data;
 }
 contextBridge.exposeInMainWorld("jazz", {
+  videoMeter: (id, bpm, numerator, denominator) =>
+    call("video:meter", id, bpm, numerator, denominator),
+  videoTools: () => call("video:tools"),
+  videoSetup: () => call("video:setup"),
+  videoPick: () => call("video:pick"),
+  videoPrepare: (input) => call("video:prepare", input),
+  videoStatus: (id) => call("video:status", id),
+  videoCancel: (id) => call("video:cancel", id),
+  videoTranscribe: (id, method, calibration) =>
+    call("video:transcribe", id, method, calibration),
   list: () => call("catalog:list"),
   load: (id: string) => call("catalog:load", id),
   openFiles: () => call("files:open"),

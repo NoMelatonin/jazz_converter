@@ -25,10 +25,13 @@ export function ScoreWorkspace({
   onReady,
 }: {
   record: CatalogSong;
-  onUpdated: (record: CatalogSong) => void;
+  onUpdated: (record: CatalogSong) => void | Promise<void>;
   onSwing: () => void;
   onReady: (arrangement: Arrangement) => void;
 }) {
+  const [videoTempo, setVideoTempo] = useState(120),
+    [videoNumerator, setVideoNumerator] = useState(4),
+    [videoDenominator, setVideoDenominator] = useState(4);
   const generation = useRef(0);
   const [analysis, setAnalysis] = useState<PianoAnalysis | null>(null),
     [arrangement, setArrangement] = useState<Arrangement | null>(null),
@@ -52,14 +55,23 @@ export function ScoreWorkspace({
     setBusy("Klavierfassung wird vorbereitet …");
     setError("");
     try {
-      const next = await window.jazz.convert(
-        record.entry.id,
-        {
-          ...settings(output),
-          melodyTrackId: trackId,
-        },
-        record.sourceRevision,
-      );
+      const next =
+        record.song.transcription && output === "original"
+          ? (
+              await window.jazz.getPlaybackVersion(
+                record.entry.id,
+                { kind: "original" },
+                record.sourceRevision,
+              )
+            ).music
+          : await window.jazz.convert(
+              record.entry.id,
+              {
+                ...settings(output),
+                melodyTrackId: trackId,
+              },
+              record.sourceRevision,
+            );
       if (token === generation.current) {
         setArrangement(next);
         onReady(next);
@@ -100,7 +112,9 @@ export function ScoreWorkspace({
         const next = (
           await window.jazz.getPlaybackVersion(
             record.entry.id,
-            { kind: "arrangement", settings: restored },
+            record.song.transcription
+              ? { kind: "original" }
+              : { kind: "arrangement", settings: restored },
             record.sourceRevision,
           )
         ).music;
@@ -154,8 +168,9 @@ export function ScoreWorkspace({
         }}
       />
     );
-  const kind =
-    analysis?.kind === "piano"
+  const kind = record.song.transcription
+    ? "Transkription des Videos"
+    : analysis?.kind === "piano"
       ? "Klavierpartitur"
       : analysis?.kind === "solo"
         ? "Einzelinstrument"
@@ -208,6 +223,63 @@ export function ScoreWorkspace({
         <p role="status" className="inline-hint">
           {busy}
         </p>
+      )}
+      {record.song.transcription && (
+        <div className="panel video-import">
+          <p>
+            Die erste Fassung erhält das Aufnahmetiming. Für eine rhythmisch
+            passende Jazzbegleitung kannst du Tempo und Taktmaß setzen. Die
+            Noten werden dabei zeitlich nicht verschoben.
+          </p>
+          <label>
+            Tempo der Begleitung (BPM)
+            <input
+              type="number"
+              min="30"
+              max="300"
+              value={videoTempo}
+              onChange={(e) => setVideoTempo(Number(e.target.value))}
+            />
+          </label>
+          <label>
+            Taktmaß
+            <select
+              value={`${videoNumerator}/${videoDenominator}`}
+              onChange={(e) => {
+                const [n, d] = e.target.value.split("/").map(Number);
+                setVideoNumerator(n);
+                setVideoDenominator(d);
+              }}
+            >
+              {["4/4", "3/4", "6/8", "2/4", "12/8"].map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="button outline"
+            disabled={!!busy}
+            onClick={async () => {
+              setBusy("Taktmaß zuordnen …");
+              try {
+                await onUpdated(
+                  await window.jazz.videoMeter(
+                    record.entry.id,
+                    videoTempo,
+                    videoNumerator,
+                    videoDenominator,
+                  ),
+                );
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy("");
+              }
+            }}
+          >
+            Zeitbasis zuordnen
+          </button>
+        </div>
       )}
       <div className="piano-options panel">
         <label>
@@ -281,7 +353,9 @@ export function ScoreWorkspace({
               <CheckCircle2 size={20} />
               <strong>
                 {arrangement.settings.mode === "original"
-                  ? "Originalnoten erhalten."
+                  ? record.song.transcription
+                    ? "Erkannte Noten mit Aufnahmetiming."
+                    : "Originalnoten erhalten."
                   : (arrangement.settings.mode ?? "swing") === "swing"
                     ? "Swing-Fassung bereit."
                     : "Klavierfassung bereit."}
@@ -355,10 +429,32 @@ export function ScoreWorkspace({
           disabled={
             !!busy || analysis?.issues.some((i) => i.severity === "error")
           }
-          onClick={onSwing}
+          onClick={async () => {
+            if (
+              record.song.transcription &&
+              !record.song.transcription.reviewed
+            ) {
+              setBusy("Hörkontrolle bestätigen …");
+              try {
+                const next = await window.jazz.correctScore(
+                  record.entry.id,
+                  record.song,
+                );
+                await onUpdated(next);
+              } catch (e) {
+                setError((e as Error).message);
+                return;
+              } finally {
+                setBusy("");
+              }
+            }
+            onSwing();
+          }}
         >
           <Sparkles size={17} />
-          Als Swing arrangieren
+          {record.song.transcription && !record.song.transcription.reviewed
+            ? "Hörkontrolle bestätigen und als Swing arrangieren"
+            : "Als Swing arrangieren"}
         </button>
       </div>
       <p className="inline-hint">
