@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -49,6 +49,8 @@ import { ScoreWorkspace } from "./components/ScoreWorkspace";
 
 type Page = "library" | "online";
 export function App() {
+  const selection = useRef(0);
+  const taskRunning = useRef(false);
   const [entries, setEntries] = useState<CatalogEntry[]>([]),
     [page, setPage] = useState<Page>("library"),
     [query, setQuery] = useState("");
@@ -64,6 +66,7 @@ export function App() {
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [previewMusic, setPreviewMusic] = useState<Arrangement | null>(null);
   const [dragging, setDragging] = useState(false),
     [modal, setModal] = useState<"help" | "credits" | "metadata" | null>(null);
   const [title, setTitle] = useState(""),
@@ -79,7 +82,8 @@ export function App() {
     label: string,
     action: () => Promise<T>,
   ): Promise<T | undefined> {
-    if (busy) return;
+    if (taskRunning.current) return;
+    taskRunning.current = true;
     setBusy(label);
     setError("");
     setNotice("");
@@ -88,6 +92,7 @@ export function App() {
     } catch (e) {
       showError(e);
     } finally {
+      taskRunning.current = false;
       setBusy("");
     }
   }
@@ -101,11 +106,14 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notice]);
   async function selectRecord(next: CatalogSong) {
+    const token = ++selection.current;
+    if (next.entry.playbackError) throw new Error(next.entry.playbackError);
     const id =
       next.settings?.melodyTrackId ??
       (next.song.pdf ? "auto" : next.song.tracks[0].id);
     const inferredChords =
       next.settings?.chords ?? (await window.jazz.analyze(next.entry.id, id));
+    if (token !== selection.current) return;
     setRecord(next);
     setPdfDocument(null);
     setScoreMode(!!next.song.pdf);
@@ -122,6 +130,11 @@ export function App() {
     setQuery("");
     setTitle(next.entry.title);
     setArtist(next.entry.artist);
+  }
+  async function openRecord(id: string) {
+    const token = ++selection.current;
+    const next = await window.jazz.load(id);
+    if (token === selection.current) await selectRecord(next);
   }
   async function openFiles() {
     await task("Datei wird geöffnet", async () => {
@@ -150,6 +163,7 @@ export function App() {
     });
   }
   function library(next: Page) {
+    selection.current++;
     setPage(next);
     setPdfDocument(null);
     setScoreMode(false);
@@ -168,7 +182,13 @@ export function App() {
   async function convert() {
     if (!record || !confirmed) return;
     await task("Dein Swing-Arrangement entsteht", async () => {
-      const result = await window.jazz.convert(record.entry.id, settings());
+      const token = selection.current;
+      const result = await window.jazz.convert(
+        record.entry.id,
+        settings(),
+        record.sourceRevision,
+      );
+      if (token !== selection.current) return;
       setArrangement(result);
       setPreview(null);
       setMode("listen");
@@ -179,7 +199,7 @@ export function App() {
     await task("MIDI wird gespeichert", async () => {
       const location = await window.jazz.saveMidi(
         record.entry.id,
-        arrangement?.settings ?? settings(),
+        arrangement?.playbackVersionId ?? arrangement?.settings ?? settings(),
       );
       if (location) setNotice(`MIDI gespeichert: ${location}`);
     });
@@ -200,19 +220,31 @@ export function App() {
           : [],
     [selectedTrack, trackId, record],
   );
-  const previewMusic = useMemo(() => {
-    if (!preview || !record) return null;
-    const notes =
-      preview === "melody"
-        ? selectedMelody.map((n) => ({ ...n, hand: "right" as const }))
-        : record.song.tracks.flatMap((t) =>
-            t.notes.map((n) => ({
-              ...n,
-              hand: n.pitch < 60 ? ("left" as const) : ("right" as const),
-            })),
-          );
-    return { ...record.song, notes };
-  }, [record, selectedTrack, selectedMelody, preview]);
+  useEffect(() => {
+    let active = true;
+    setPreviewMusic(null);
+    if (preview && record)
+      void window.jazz
+        .getPlaybackVersion(
+          record.entry.id,
+          preview === "melody"
+            ? { kind: "melody", trackId }
+            : { kind: "original" },
+          record.sourceRevision,
+        )
+        .then((version) => {
+          if (active) setPreviewMusic(version.music);
+        })
+        .catch((e) => {
+          if (active) {
+            showError(e);
+            setPreview(null);
+          }
+        });
+    return () => {
+      active = false;
+    };
+  }, [record, preview, trackId]);
   async function changeTrack(id: string) {
     if (!record) return;
     await task("Akkorde werden geprüft", async () => {
@@ -311,7 +343,7 @@ export function App() {
             <i />
             Lokal auf deinem Mac
           </div>
-          <span className="app-version">VERSION 2.0 · PIANO & SWING</span>
+          <span className="app-version">VERSION 2.0.1 · PIANO & SWING</span>
         </div>
       </aside>
       <main>
@@ -483,7 +515,7 @@ export function App() {
                         disabled={!!busy}
                         onClick={() =>
                           void task("Song wird geladen", async () =>
-                            selectRecord(await window.jazz.load(entry.id)),
+                            openRecord(entry.id),
                           )
                         }
                       >
@@ -500,6 +532,9 @@ export function App() {
                           <small>
                             {entry.source} · {entry.license}
                           </small>
+                          {entry.playbackError && (
+                            <small role="status">{entry.playbackError}</small>
+                          )}
                         </div>
                         <span className="format-tag">{entry.format}</span>
                         {entry.license === "CC0 1.0" && (
@@ -600,9 +635,11 @@ export function App() {
                 </div>
                 <div>
                   <span className="eyebrow">
-                    {scoreMode ? 'DEINE KLAVIERFASSUNG' : arrangement
-                      ? "DEIN SWING-ARRANGEMENT"
-                      : "MACH DEINEN SONG ZU JAZZ"}
+                    {scoreMode
+                      ? "DEINE KLAVIERFASSUNG"
+                      : arrangement
+                        ? "DEIN SWING-ARRANGEMENT"
+                        : "MACH DEINEN SONG ZU JAZZ"}
                   </span>
                   <h1>
                     {record.entry.title}
@@ -625,6 +662,7 @@ export function App() {
               </div>
               {scoreMode ? (
                 <ScoreWorkspace
+                  key={record.entry.id}
                   record={record}
                   onReady={setArrangement}
                   onUpdated={(next) => void selectRecord(next)}
@@ -679,6 +717,7 @@ export function App() {
                       </label>
                       <button
                         className="button outline"
+                        disabled={!selectedMelody.length}
                         onClick={() =>
                           setPreview(preview === "melody" ? null : "melody")
                         }
@@ -691,6 +730,7 @@ export function App() {
                       {!confirmed && (
                         <button
                           className="button primary small"
+                          disabled={!selectedMelody.length}
                           onClick={() => {
                             setConfirmed(true);
                             setPreview(null);
@@ -701,6 +741,12 @@ export function App() {
                         </button>
                       )}
                     </div>
+                    {!selectedMelody.length && (
+                      <p className="message error" role="alert">
+                        Die gewählte Melodiestimme enthält keine hörbaren Noten.
+                        Bitte eine andere Stimme auswählen.
+                      </p>
+                    )}
                     <button
                       className="text-button"
                       onClick={() =>
@@ -724,6 +770,7 @@ export function App() {
                     <Player
                       key={`${record.entry.id}-${preview}-${trackId}`}
                       music={previewMusic}
+                      startAtFirstNote={preview === "melody"}
                       mode="listen"
                       onError={showError}
                     />
@@ -949,7 +996,12 @@ export function App() {
                     <button
                       className="button primary convert"
                       onClick={convert}
-                      disabled={!!busy || !confirmed || needsConfirmation}
+                      disabled={
+                        !!busy ||
+                        !confirmed ||
+                        needsConfirmation ||
+                        !selectedMelody.length
+                      }
                     >
                       <Sparkles size={19} />
                       Swing-Arrangement erstellen
@@ -1057,6 +1109,7 @@ export function App() {
                     <Player
                       key={`${record.entry.id}-compare`}
                       music={previewMusic}
+                      startAtFirstNote={preview === "melody"}
                       mode="listen"
                       onError={showError}
                     />
@@ -1220,11 +1273,12 @@ export function App() {
                 <p>
                   <strong>PDF-Notenerkennung: Audiveris 5.11.0</strong>
                   <br />
-                  GNU AGPL v3. Lokale Symbolerkennung und Tesseract mit englischen
-                  und deutschen Sprachdaten (Apache 2.0). Lizenztexte, Quellcode
-                  und die kleine Anpassung für private Arbeitsordner liegen im
-                  App-Paket unter Resources/omr. Die Notenerkennung verwendet
-                  mitgelieferte trainierte Modelle; das Arrangement folgt festen Regeln.
+                  GNU AGPL v3. Lokale Symbolerkennung und Tesseract mit
+                  englischen und deutschen Sprachdaten (Apache 2.0).
+                  Lizenztexte, Quellcode und die kleine Anpassung für private
+                  Arbeitsordner liegen im App-Paket unter Resources/omr. Die
+                  Notenerkennung verwendet mitgelieferte trainierte Modelle; das
+                  Arrangement folgt festen Regeln.
                 </p>
                 <p>
                   Importierte eigene Dateien werden nicht hochgeladen.

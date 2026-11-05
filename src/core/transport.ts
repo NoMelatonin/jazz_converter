@@ -1,5 +1,6 @@
 import type { Note, Tempo } from "./model";
 import { beatAtSeconds, secondsAt, value } from "./time";
+import { assertTimeline } from "./playback";
 export type PracticeHand = "both" | "left" | "right";
 export interface PlaybackSink {
   now(): number;
@@ -26,6 +27,7 @@ export class Transport {
     readonly tempos: Tempo[],
     readonly duration: number,
   ) {
+    assertTimeline(notes, tempos, duration);
     this.timeline = notes.map((note) => ({
       note,
       start: secondsAt(value(note.start), tempos),

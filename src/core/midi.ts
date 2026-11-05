@@ -1,5 +1,6 @@
 import { writeMidi, type MidiEvent } from "midi-file";
 import type { Arrangement } from "./model";
+import { assertPlayback } from "./playback";
 import { cmp, end, value } from "./time";
 const tick = (b: { n: number; d: number }) => Math.round(value(b) * 960);
 type WithoutDelta<T> = T extends unknown ? Omit<T, "deltaTime"> : never;
@@ -19,6 +20,7 @@ function events(items: Timed[]): MidiEvent[] {
   });
 }
 export function exportMidi(arrangement: Arrangement): Uint8Array {
+  assertPlayback(arrangement);
   const total = arrangement.notes.reduce(
     (latest, note) => Math.max(latest, tick(end(note)), tick(note.start) + 1),
     tick(arrangement.duration),

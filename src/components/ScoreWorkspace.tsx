@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -29,6 +29,7 @@ export function ScoreWorkspace({
   onSwing: () => void;
   onReady: (arrangement: Arrangement) => void;
 }) {
+  const generation = useRef(0);
   const [analysis, setAnalysis] = useState<PianoAnalysis | null>(null),
     [arrangement, setArrangement] = useState<Arrangement | null>(null),
     [difficulty, setDifficulty] = useState<Difficulty>("easy"),
@@ -46,57 +47,78 @@ export function ScoreWorkspace({
     chords: [],
   });
   async function convert(output: "original" | "reduction", trackId = melody) {
+    const token = ++generation.current;
+    setArrangement(null);
     setBusy("Klavierfassung wird vorbereitet …");
     setError("");
     try {
-      const next = await window.jazz.convert(record.entry.id, {
-        ...settings(output),
-        melodyTrackId: trackId,
-      });
-      setArrangement(next);
-      onReady(next);
+      const next = await window.jazz.convert(
+        record.entry.id,
+        {
+          ...settings(output),
+          melodyTrackId: trackId,
+        },
+        record.sourceRevision,
+      );
+      if (token === generation.current) {
+        setArrangement(next);
+        onReady(next);
+      }
     } catch (e) {
-      setError((e as Error).message);
+      if (token === generation.current) setError((e as Error).message);
     } finally {
-      setBusy("");
+      if (token === generation.current) setBusy("");
     }
   }
   useEffect(() => {
+    const token = ++generation.current;
     let active = true;
     setArrangement(null);
     setError("");
     setBusy("Spielbarkeit wird geprüft …");
     void window.jazz
-      .analyzePiano(record.entry.id)
+      .analyzePiano(record.entry.id, record.settings?.melodyTrackId ?? "auto")
       .then(async (report) => {
-        if (!active) return;
+        if (!active || token !== generation.current) return;
         setAnalysis(report);
         if (report.issues.some((i) => i.severity === "error")) {
           setReview(true);
           setBusy("");
           return;
         }
-        const next = await window.jazz.convert(record.entry.id, {
-          style: "swing",
-          mode: report.directlyPlayable ? "original" : "reduction",
-          difficulty: "easy",
-          melodyTrackId: "auto",
-          chords: [],
-        });
-        if (active) {
+        const restored =
+          record.settings ??
+          ({
+            style: "swing",
+            mode: report.directlyPlayable ? "original" : "reduction",
+            difficulty: "easy",
+            melodyTrackId: "auto",
+            chords: [],
+          } satisfies Settings);
+        setDifficulty(restored.difficulty);
+        setMelody(restored.melodyTrackId);
+        const next = (
+          await window.jazz.getPlaybackVersion(
+            record.entry.id,
+            { kind: "arrangement", settings: restored },
+            record.sourceRevision,
+          )
+        ).music;
+        if (active && token === generation.current) {
           setArrangement(next);
           onReady(next);
           setBusy("");
         }
       })
       .catch((e) => {
-        if (active) {
+        if (active && token === generation.current) {
           setError(e.message);
           setBusy("");
         }
       });
     return () => {
       active = false;
+      generation.current++;
     };
   }, [record]);
   async function save(xml: boolean, source = false) {
@@ -106,9 +128,14 @@ export function ScoreWorkspace({
       const location = xml
         ? await window.jazz.saveMusicXml(
             record.entry.id,
-            source ? undefined : arrangement?.settings,
+            source
+              ? undefined
+              : (arrangement?.playbackVersionId ?? arrangement?.settings),
           )
-        : await window.jazz.saveMidi(record.entry.id, arrangement!.settings);
+        : await window.jazz.saveMidi(
+            record.entry.id,
+            arrangement!.playbackVersionId ?? arrangement!.settings,
+          );
       if (location) setNotice(`Gespeichert: ${location}`);
     } catch (e) {
       setError((e as Error).message);
@@ -191,6 +218,7 @@ export function ScoreWorkspace({
             disabled={!!busy}
             onChange={(e) => {
               setMelody(e.target.value);
+              generation.current++;
               setArrangement(null);
             }}
           >
@@ -214,6 +242,7 @@ export function ScoreWorkspace({
             disabled={!!busy}
             onChange={(e) => {
               setDifficulty(e.target.value as Difficulty);
+              generation.current++;
               setArrangement(null);
             }}
           >
@@ -253,7 +282,9 @@ export function ScoreWorkspace({
               <strong>
                 {arrangement.settings.mode === "original"
                   ? "Originalnoten erhalten."
-                  : "Klavierfassung bereit."}
+                  : (arrangement.settings.mode ?? "swing") === "swing"
+                    ? "Swing-Fassung bereit."
+                    : "Klavierfassung bereit."}
               </strong>
               {arrangement.settings.mode === "original"
                 ? "Max. Oktave · 5 Töne je Hand"

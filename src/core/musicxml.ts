@@ -1,4 +1,6 @@
 import type { Arrangement, Song, Note, Part, Beat, Rest } from "./model";
+import { ENGINE_VERSION } from "./model";
+import { assertPlayback, assertSong } from "./playback";
 import { add, beat, cmp, end, sub, value } from "./time";
 const escape = (s: string) =>
   s.replace(
@@ -34,6 +36,8 @@ function pitchXml(pitch: number) {
 }
 /** Expanded performance form, exact rational durations, concert pitches for the piano. */
 export function exportMusicXml(music: Song | Arrangement): string {
+  if ("notes" in music) assertPlayback(music);
+  else assertSong(music);
   const piano = "notes" in music;
   const sourceNotes: (Note | Rest)[] = piano
     ? music.notes
@@ -201,5 +205,5 @@ export function exportMusicXml(music: Song | Arrangement): string {
         .join("")}</part>`;
     })
     .join("");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="4.0"><work><work-title>${escape(music.title)}</work-title></work><identification><creator type="composer">${escape(music.artist)}</creator><encoding><software>Jazz Converter 2.0.0</software></encoding></identification><part-list>${partList}</part-list>${body}</score-partwise>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="4.0"><work><work-title>${escape(music.title)}</work-title></work><identification><creator type="composer">${escape(music.artist)}</creator><encoding><software>Jazz Converter ${ENGINE_VERSION}</software></encoding></identification><part-list>${partList}</part-list>${body}</score-partwise>`;
 }

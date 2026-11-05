@@ -8,6 +8,8 @@ import type {
   PdfJob,
   PianoAnalysis,
   Song,
+  PlaybackVersion,
+  PlaybackRequest,
 } from "./core/model";
 export interface JazzApi {
   list(): Promise<CatalogEntry[]>;
@@ -21,15 +23,28 @@ export interface JazzApi {
     metadata: { title: string; artist: string },
   ): Promise<CatalogSong>;
   analyze(id: string, trackId: string): Promise<Chord[]>;
-  convert(id: string, settings: Settings): Promise<Arrangement>;
-  saveMidi(id: string, settings: Settings): Promise<string | null>;
+  convert(
+    id: string,
+    settings: Settings,
+    revision?: string,
+  ): Promise<Arrangement>;
+  saveMidi(id: string, settings: Settings | string): Promise<string | null>;
+  getPlaybackVersion(
+    id: string,
+    request: PlaybackRequest,
+    revision?: string,
+  ): Promise<PlaybackVersion>;
+  loadPlaybackVersion(id: string, versionId: string): Promise<PlaybackVersion>;
   demoFiles(): Promise<string | null>;
   pdfBytes(id: string): Promise<Uint8Array>;
   startPdf(id: string, pages: number[], rotation: number): Promise<PdfJob>;
   pdfStatus(id: string): Promise<PdfJob>;
   cancelPdf(id: string): Promise<PdfJob>;
   analyzePiano(id: string, trackId?: string): Promise<PianoAnalysis>;
-  saveMusicXml(id: string, settings?: Settings): Promise<string | null>;
+  saveMusicXml(
+    id: string,
+    settings?: Settings | string,
+  ): Promise<string | null>;
   correctScore(
     id: string,
     score: Pick<

@@ -27,7 +27,11 @@ for (const arch of ["arm64", "x64"]) {
     await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundle]);
     console.log(`PASS ${arch}: DMG geöffnet, App-Signatur vollständig geprüft`);
     if (arch === "arm64") {
-      for (const script of ["scripts/e2e.mjs", "scripts/e2e-pdf.mjs"]) {
+      for (const script of [
+        "scripts/e2e.mjs",
+        "scripts/e2e-pdf.mjs",
+        "scripts/e2e-versions.mjs",
+      ]) {
         const result = await run(process.execPath, [script], {
           env: {
             ...process.env,

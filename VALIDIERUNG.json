@@ -1,17 +1,30 @@
 {
-  "version": "2.0.0",
-  "verifiedAt": "2026-11-04T19:52:49.034180+00:00",
-  "unitTests": 39,
+  "version": "2.0.1",
+  "verifiedAt": "2026-11-05T07:08:53.251241+00:00",
+  "unitTests": 71,
+  "newRegressionTests": 32,
   "offlineDesktopTest": "passed from read-only arm64 DMG",
   "offlineDesktopScenarios": 11,
   "pdfDesktopTest": "passed from read-only arm64 DMG with bundled Java and models",
   "pdfDesktopScenarios": 10,
+  "versionDesktopTest": "passed from read-only arm64 DMG: exact saved notes, audio signal, restart, stale/corrupt data, navigation, empty hand and legacy checksums",
+  "versionDesktopScenarios": 11,
+  "legacyDataPreservation": "all 8 prepared catalog files (including malformed JSON) and the original MusicXML remain byte-identical",
+  "existingCatalogCompatibility": {
+    "readOnly": true,
+    "songs": 6,
+    "passedSourceValidation": 6
+  },
   "pdfReferenceCases": {
+    "verifiedVersion": "2.0.1",
     "total": 8,
     "exactRecognition": 6,
     "recognitionErrorsCorrectlyGated": 2
   },
-  "independentFullOmrRepeat": "piano and orchestra-scan: byte-identical MIDI at both difficulty levels on Apple Silicon",
+  "independentFullOmrRepeat": {
+    "lastVerifiedVersion": "2.0.0",
+    "result": "piano and orchestra-scan: byte-identical MIDI at both levels on Apple Silicon"
+  },
   "externalRendererRequestsInOfflineTests": 0,
   "onlineSourcesVerified": {
     "count": 3,
@@ -24,6 +37,7 @@
   },
   "diskImageChecksums": "verified",
   "architectureGuide": "ARCHITEKTUR.md - four reading depths",
+  "fixReport": "FEHLERBEHEBUNG-FASSUNGEN.md",
   "pending": [
     "Manual musical listening acceptance",
     "Physical audio/display latency measurement on target device",
@@ -31,14 +45,14 @@
   ],
   "artifacts": [
     {
-      "name": "Jazz Converter-2.0.0-arm64.dmg",
-      "bytes": 292822372,
-      "sha256": "24983bbce4b6a690849bc3aefa2809e4fee2ecd1b9330cc2ff19b65cb9122262"
+      "name": "Jazz Converter-2.0.1-arm64.dmg",
+      "bytes": 292855230,
+      "sha256": "2683f07bb291737e4576b75a02e53528b12c1ec772255bddcb643350fa567cc2"
     },
     {
-      "name": "Jazz Converter-2.0.0.dmg",
-      "bytes": 301749821,
-      "sha256": "66a6eee47427e93d15d32a59ec6b25f940640a8b360231a532519755fe9f99dd"
+      "name": "Jazz Converter-2.0.1.dmg",
+      "bytes": 301749110,
+      "sha256": "e264f89ad041a8da9e8116e022624b66423197af0d9de89420c330fa2d4c519d"
     }
   ]
 }

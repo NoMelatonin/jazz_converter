@@ -126,6 +126,8 @@ export interface Settings {
   mode?: "original" | "reduction" | "swing";
 }
 export interface Arrangement {
+  playbackVersionId?: string;
+  sourceRevision?: string;
   songId: string;
   title: string;
   artist: string;
@@ -141,6 +143,7 @@ export interface Arrangement {
   report?: PianoAnalysis;
 }
 export interface CatalogEntry {
+  playbackError?: string;
   id: string;
   title: string;
   artist: string;
@@ -151,9 +154,24 @@ export interface CatalogEntry {
   importedAt?: string;
 }
 export interface CatalogSong {
+  sourceRevision?: string;
   entry: CatalogEntry;
   song: Song;
   settings?: Settings;
+}
+export type PlaybackRequest =
+  | { kind: "original" }
+  | { kind: "melody"; trackId: string }
+  | { kind: "arrangement"; settings: Settings };
+export interface PlaybackVersion {
+  schemaVersion: 1;
+  id: string;
+  sourceId: string;
+  sourceRevision: string;
+  engineVersion: string;
+  request: PlaybackRequest;
+  music: Arrangement;
+  contentHash: string;
 }
 export interface PianoAnalysis {
   kind: "piano" | "solo" | "ensemble" | "unknown";
@@ -186,7 +204,7 @@ export interface PdfJob {
   results?: CatalogSong[];
   error?: string;
 }
-export const ENGINE_VERSION = "2.0.0";
+export const ENGINE_VERSION = "2.0.1";
 export const LIMITS = {
   easy: { span: 7, left: 2, right: 3 },
   medium: { span: 12, left: 3, right: 4 },

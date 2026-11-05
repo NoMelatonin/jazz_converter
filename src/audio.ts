@@ -24,9 +24,15 @@ export class PianoAudio implements PlaybackSink {
         string,
         { file: string }
       >;
+      if (!manifest || !Object.keys(manifest).length)
+        throw new Error(
+          "Die Klaviersamples fehlen. Bitte die App vollständig installieren.",
+        );
       this.samples = await Promise.all(
         Object.entries(manifest).map(async ([name, info]) => {
-          const root = /^(A|C|Ds|Fs)(\d)$/.exec(name)!;
+          const root = /^(A|C|Ds|Fs)(\d)$/.exec(name);
+          if (!root || !info || typeof info.file !== "string")
+            throw new Error("Die mitgelieferten Klaviersamples sind ungültig.");
           const pitch =
             12 * (Number(root[2]) + 1) +
             ({ A: 9, C: 0, Ds: 3, Fs: 6 } as Record<string, number>)[root[1]];
@@ -34,11 +40,23 @@ export class PianoAudio implements PlaybackSink {
             new URL(`piano/${info.file}`, document.baseURI),
           );
           if (!sound.ok) throw new Error(`Klaviersample ${name} fehlt.`);
+          const buffer = await this.context.decodeAudioData(
+            await sound.arrayBuffer(),
+          );
+          if (
+            !Number.isFinite(buffer.duration) ||
+            buffer.duration <= 0 ||
+            !buffer.numberOfChannels ||
+            !buffer
+              .getChannelData(0)
+              .some((value) => Number.isFinite(value) && Math.abs(value) > 1e-8)
+          )
+            throw new Error(
+              `Klaviersample ${name} enthält keinen hörbaren Ton.`,
+            );
           return {
             pitch,
-            buffer: await this.context.decodeAudioData(
-              await sound.arrayBuffer(),
-            ),
+            buffer,
           };
         }),
       );
@@ -51,6 +69,10 @@ export class PianoAudio implements PlaybackSink {
   async ready() {
     await this.load();
     await this.context.resume();
+    if (this.context.state !== "running")
+      throw new Error(
+        "Die Audioausgabe konnte nicht gestartet werden. Bitte erneut auf Abspielen klicken.",
+      );
   }
   now() {
     return this.context.currentTime;
@@ -66,6 +88,22 @@ export class PianoAudio implements PlaybackSink {
       : Math.max(0, this.now() - (this.context.outputLatency || 0));
   }
   schedule(note: Note, when: number, duration: number, elapsed: number) {
+    if (
+      !Number.isInteger(note.pitch) ||
+      note.pitch < 21 ||
+      note.pitch > 108 ||
+      !Number.isFinite(when) ||
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      !Number.isFinite(elapsed) ||
+      elapsed < 0 ||
+      !Number.isInteger(note.velocity) ||
+      note.velocity < 1 ||
+      note.velocity > 127
+    )
+      throw new Error(
+        "Diese Fassung enthält ein ungültiges Klangereignis. Bitte die Noten prüfen.",
+      );
     if (!this.samples.length)
       throw new Error("Das Klavier ist noch nicht geladen.");
     const sample = this.samples.reduce((best, current) =>

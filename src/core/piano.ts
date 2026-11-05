@@ -11,6 +11,7 @@ import { ENGINE_VERSION, LIMITS } from "./model";
 import { add, beat, cmp, end, sub, value } from "./time";
 import { extractMelody } from "./melody";
 import { violations } from "./arrange";
+import { assertPlayback, assertSong } from "./playback";
 
 type Step = { previous?: Step; assigned: [string, "left" | "right"][] };
 type State = {
@@ -547,6 +548,7 @@ export function reducePiano(
   return { notes, warnings: [...new Set(warnings)] };
 }
 export function pianoArrangement(song: Song, settings: Settings): Arrangement {
+  assertSong(song);
   const report = analyzePiano(song, settings.melodyTrackId);
   if (report.issues.some((i) => i.severity === "error"))
     throw new Error(
@@ -563,7 +565,7 @@ export function pianoArrangement(song: Song, settings: Settings): Arrangement {
   const reduced = direct
     ? { notes: direct, warnings: [] }
     : reducePiano(song, settings, report);
-  return {
+  const output: Arrangement = {
     songId: song.id,
     title: song.title,
     artist: song.artist,
@@ -578,4 +580,6 @@ export function pianoArrangement(song: Song, settings: Settings): Arrangement {
     warnings: [...report.warnings, ...reduced.warnings],
     report,
   };
+  assertPlayback(output);
+  return output;
 }

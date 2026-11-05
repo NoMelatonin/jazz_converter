@@ -29,6 +29,7 @@ import type {
 } from "../src/core/model";
 import { importXml } from "../src/core/import-xml";
 import { enrichOmrMetadata } from "./omr-metadata";
+import { assertSong } from "../src/core/playback";
 
 const hash = (data: Uint8Array | string) =>
   createHash("sha256").update(data).digest("hex");
@@ -540,6 +541,7 @@ export class PdfService {
       };
       song.format = "PDF";
       if (this.status(job.id).status === "cancelled") return;
+      assertSong(song);
       results.push(await this.commit(song, bytes, job.id, index, doc));
     }
     if (this.status(job.id).status === "cancelled") return;

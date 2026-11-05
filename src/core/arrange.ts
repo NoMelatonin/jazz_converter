@@ -10,6 +10,7 @@ import {
 import { add, beat, cmp, end, max, sub, value } from "./time";
 import { extractMelody } from "./melody";
 import { jazzChord, type ParsedChord } from "./harmony";
+import { assertPlayback, assertSong } from "./playback";
 
 function swing(melody: Note[]): Note[] {
   const notes = melody.map((n) => ({ ...n }));
@@ -170,8 +171,11 @@ export function violations(
 }
 
 export function arrange(song: Song, settings: Settings): Arrangement {
+  assertSong(song);
   const track = song.tracks.find((t) => t.id === settings.melodyTrackId);
   if (!track) throw new Error("Bitte eine Melodiespur auswählen.");
+  if (!track.notes.length)
+    throw new Error("Die gewählte Melodiestimme enthält keine hörbaren Noten.");
   if (!settings.chords.length)
     throw new Error("Bitte zuerst Akkorde ergänzen.");
   if (settings.chords.some((c) => c.confidence < 0.2 && c.source !== "manual"))
@@ -299,7 +303,7 @@ export function arrange(song: Song, settings: Settings): Arrangement {
     throw new Error(
       `Die Griffprüfung konnte diese Passage nicht vereinfachen: ${errors.join(", ")}.`,
     );
-  return {
+  const output: Arrangement = {
     songId: song.id,
     title: song.title,
     artist: song.artist,
@@ -313,4 +317,6 @@ export function arrange(song: Song, settings: Settings): Arrangement {
     duration: song.duration,
     warnings: adapted.warnings,
   };
+  assertPlayback(output);
+  return output;
 }

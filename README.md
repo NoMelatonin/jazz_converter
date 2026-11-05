@@ -8,8 +8,8 @@ Lokale macOS-App mit deutscher Oberfläche: PDF-Notenblätter, MIDI oder MusicXM
 
 Voraussetzung: macOS 14 oder neuer.
 
-- **Apple Silicon (M1 und neuer):** `release/Jazz Converter-2.0.0-arm64.dmg`
-- **Intel:** `release/Jazz Converter-2.0.0.dmg`
+- **Apple Silicon (M1 und neuer):** `release/Jazz Converter-2.0.1-arm64.dmg`
+- **Intel:** `release/Jazz Converter-2.0.1.dmg`
 
 DMG öffnen, **Jazz Converter** nach **Programme** ziehen und starten. Die App ist lokal/ad hoc signiert und nicht Apple-notarisiert. Bei einer macOS-Sperre den Start unter **Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen** bestätigen. Keine Sicherheitseinstellungen dauerhaft abschalten.
 
@@ -62,6 +62,14 @@ Das MIDI ist **Standard-MIDI Typ 1** mit einer Metadatenspur und je einer Notens
 
 Identische Quelldaten, Melodieauswahl, Akkordkorrekturen, Einstellungen und Engine-Version ergeben identische MIDI-Bytes. Übetempo, Position und Handauswahl beeinflussen den Export nicht.
 
+## Gespeicherte Fassungen (ab 2.0.1)
+
+Original-Hörprobe, Melodie-Hörprobe und erzeugte Arrangements erhalten jeweils eine eindeutige Kennung. Unter `versions/<Song-ID>/<Fassungs-ID>.json` werden ihre tatsächlichen Noten, Zeitdaten, Einstellungen, Quellrevision und eine Integritätsprüfsumme unveränderlich gespeichert. Player und Export greifen auf genau diese Daten zu. Gespeicherte Melodieauswahl und Schwierigkeit werden beim Öffnen übernommen.
+
+Ältere Katalogeinträge bleiben erhalten. Beim ersten Aufruf wird eine geprüfte Fassung aus ihren vorhandenen Einstellungen angelegt; Originaldateien und bisherige Katalogdaten werden dabei nicht umgeschrieben. Leere, ungültige, beschädigte oder nicht mehr zur Quelle passende Fassungen liefern eine verständliche Fehlermeldung. Fehlerhafte Katalogeinträge bleiben sichtbar. Nach einer Quellkorrektur wird eine neue Fassung angelegt; vorherige Fassungsdateien bleiben erhalten.
+
+Eine Melodie-Hörprobe startet bei ihrem ersten Ton, auch wenn die gewählte Stimme erst spät im Stück einsetzt. Ihre gespeicherten Zeitpositionen bleiben unverändert. Originalwiedergabe und Übemodus erhalten die vollständigen Pausen.
+
 ## Üben
 
 88 Tasten von A0 bis C8; links blau, rechts orange. Die Balken zeigen Start und Dauer. Wiedergabe, Animation und Export verwenden dieselben Arrangementnoten und dieselbe Tempokarte.
@@ -96,6 +104,7 @@ Die Klaviersamples und Lizenztexte sind bereits im Repository enthalten. Die lau
 npm test                 # Import, musikalische Regeln, Export und Transport
 npm run build            # Typprüfung, Lizenztexte und Produktionsbuild
 npm run test:e2e         # echte Electron-App, vollständig offline
+npm run test:e2e:versions # Fassungszuordnung, Altbestand, Fehler und hörbare Wiedergabe
 npm run test:e2e:pdf     # PDF-Vorschau, echte OMR, Korrektur und beide Exporte
 npm run verify:pdf       # Referenzpartituren, Scans und blockierte Erkennungsfehler
 npm run verify:omr       # einzelner echter Audiveris-Import

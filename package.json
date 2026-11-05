@@ -1,10 +1,10 @@
 {
   "name": "jazz-converter",
   "productName": "Jazz Converter",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "type": "module",
-  "description": "Lokale Swing-Arrangements für zwei Hände",
+  "description": "Lokale Swing-Arrangements f\u00fcr zwei H\u00e4nde",
   "author": "Jazz Converter",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -24,7 +24,8 @@
     "icon": "node scripts/make-icon.mjs",
     "previews": "node scripts/listening.mjs",
     "package": "npm run build && node scripts/package.mjs",
-    "package:local": "npm run build && node scripts/package.mjs --local"
+    "package:local": "npm run build && node scripts/package.mjs --local",
+    "test:e2e:versions": "node scripts/e2e-versions.mjs"
   },
   "build": {
     "appId": "de.jazzconverter.app",

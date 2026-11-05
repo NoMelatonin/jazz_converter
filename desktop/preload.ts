@@ -15,7 +15,11 @@ contextBridge.exposeInMainWorld("jazz", {
   update: (id: string, metadata: { title: string; artist: string }) =>
     call("catalog:update", id, metadata),
   analyze: (id: string, trackId: string) => call("chords:analyze", id, trackId),
-  convert: (id: string, settings: unknown) => call("arrange", id, settings),
+  convert: (id: string, settings: unknown, revision?: string) =>
+    call("arrange", id, settings, revision),
+  getPlaybackVersion: (id, request, revision) =>
+    call("playback:resolve", id, request, revision),
+  loadPlaybackVersion: (id, versionId) => call("playback:load", id, versionId),
   saveMidi: (id: string, settings: unknown) => call("midi:save", id, settings),
   demoFiles: () => call("demo:save"),
   pdfBytes: (id: string) => call("pdf:bytes", id),

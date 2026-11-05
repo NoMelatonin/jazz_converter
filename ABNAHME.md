@@ -1,10 +1,18 @@
-# Abnahme Version 2.0.0
+# Abnahme Version 2.0.1
 
 Die automatischen Ergebnisse stehen unter `test-results/`. Die Tests benutzen ein eigenes temporäres Katalogverzeichnis und verändern keine persönlichen Musikdateien.
 
+## Fassungen: Korrektur in 2.0.1
+
+Die neuen Regressionen prüfen alle Grenzen von Quelle über gespeicherte Fassung bis Transport und Export. Leere Reduktionen, Ereignisse nach dem Songende, Dauer null, ungültige Tonhöhen/Zeitwerte und unhörbare Anschlagstärken werden abgewiesen. Falsche Quellzuordnung, beschädigte Fassungsdateien, veraltete Quellrevisionen und verspätete Konvertierungen sind abgedeckt. Der musikalische Kern und die Exporte verwenden dieselbe Prüfung.
+
+Der zusätzliche Desktop-Test `npm run test:e2e:versions` bestätigt mit gemessenem Web-Audio-Signal: Eine spät einsetzende Melodie ist als Hörprobe sofort hörbar; gespeicherte Auswahl und Mittel bleiben nach Neustart erhalten; Player und Export greifen auf dieselbe Fassung zu. Quellkorrekturen sperren alte Referenzen, verzögerte Antworten überschreiben nach Navigation keine andere Ansicht, und beschädigte Fassungen oder fehlende Samples ergeben Fehlermeldungen. Alle vorbereiteten Altbestandsdateien und die Originalquelle bleiben nach Prüfsummenvergleich bytegleich. Fehlerhafte Katalogeinträge bleiben sichtbar.
+
+Die sechs vorhandenen persönlichen Songs wurden nur gelesen und bestanden die neue Quellenprüfung. Es wurde keine Beschädigung ihrer Quelldaten nachgewiesen. Details zur Ursache und zur Korrektur: [FEHLERBEHEBUNG-FASSUNGEN.md](FEHLERBEHEBUNG-FASSUNGEN.md).
+
 ## Automatisch geprüft
 
-- 39 Tests für MIDI/MusicXML/MXL, mehrspurige Quellen, Kanaltrennung, Schlagzeugfilter, Auftakt, Pausen, Bindungen, Stimmen, Wiederholungen und Takt-/Tempowechsel.
+- 71 Tests für MIDI/MusicXML/MXL, mehrspurige Quellen, Kanaltrennung, Schlagzeugfilter, Auftakt, Pausen, Bindungen, Stimmen, Wiederholungen und Takt-/Tempowechsel.
 - Standard-MusicXML-DTD ohne Netzwerk; Ablehnung beschädigter Dateien, interner Entitäten und nicht unterstützter Navigation.
 - Deterministische Konvertierung für Einfach und Mittel; vollständige Melodietonfolge modulo erlaubter Oktavierung und veränderte Begleitung.
 - Genau zwei MIDI-Notenspuren plus Metadatenspur, beide Acoustic Grand Piano / Programm 0. Export-Rückimport erhält die erzeugten Noten bis auf die dokumentierte Tick-Rundung.
@@ -30,7 +38,7 @@ Die drei echten Mutopia-Direktdownloads wurden für Version 1 separat importiert
 | Flöte, digitales PDF                     | Taktzeichen teilweise als Note erkannt; überfüllter Takt blockiert die automatische Ausgabe   |
 | Orchester, digitales PDF                 | Zwei falsche Zusatznoten aus Taktzeichen; überfüllter Takt blockiert die automatische Ausgabe |
 
-Die zwei fehlerhaften Erkennungsergebnisse sind ausdrücklich **keine fehlerfreien OMR-Imports**. Erfolgreich geprüft ist hier die verpflichtende Korrekturschranke. Die Matrix bestätigt für die sechs exakt erkannten Partituren die vollständige Übereinstimmung mit den beim Notensatz gespeicherten Referenzdaten. Beide Reduktionsstufen werden auf Griffgrenzen und bytegleichen wiederholten MIDI-Export geprüft. Zusätzlich erzeugen vollständig neue, unabhängige OMR-Läufe von Klavier-PDF und Orchester-Scan in beiden Stufen bytegleiche MIDI-Dateien (auf diesem Apple-Silicon-Mac). Nach `verify:pdf` lässt sich das mit `node scripts/check-pdf-repeat.mjs` wiederholen; Ergebnis: `test-results/pdf-repeat-report.json`. Abbruch, erneutes Laden des Auftragszustands und Cache-Wiederverwendung werden ebenfalls geprüft. Die Fixtures sind klein und decken nicht beliebige veröffentlichte Partituren ab.
+Die zwei fehlerhaften Erkennungsergebnisse sind ausdrücklich **keine fehlerfreien OMR-Imports**. Erfolgreich geprüft ist hier die verpflichtende Korrekturschranke. Die Matrix bestätigt für die sechs exakt erkannten Partituren die vollständige Übereinstimmung mit den beim Notensatz gespeicherten Referenzdaten. Beide Reduktionsstufen werden auf Griffgrenzen und bytegleichen wiederholten MIDI-Export geprüft. Für Version 2.0.0 erzeugten zusätzlich vollständig neue, unabhängige OMR-Läufe von Klavier-PDF und Orchester-Scan in beiden Stufen bytegleiche MIDI-Dateien (auf diesem Apple-Silicon-Mac). Nach `verify:pdf` lässt sich das mit `node scripts/check-pdf-repeat.mjs` wiederholen; Ergebnis: `test-results/pdf-repeat-report.json`. Abbruch, erneutes Laden des Auftragszustands und Cache-Wiederverwendung werden ebenfalls geprüft. Die Fixtures sind klein und decken nicht beliebige veröffentlichte Partituren ab.
 
 Der zusätzliche Electron-PDF-Test prüft lokale Vorschau und Zoom, die WebAssembly-Freigabe für lokale PDF-Decoder, Seitenauswahl ohne Deckblatt, echte OMR, Seitenverweise, unveränderten Original-Hash, Originalzuordnung, Wiedergabe bei halbem Tempo nach Sprung, MIDI mit zwei Klavier-Handspuren, Quell- und Klavier-MusicXML, Noten-/Pausenkorrektur mit gespeicherter Prüffreigabe sowie automatische Orchesterreduktion mit B-Klarinette. Er prüft außerdem, dass ein realer Erkennungsfehler die Prüfoberfläche öffnet und die Klavierausgabe blockiert. Rendererfehler und externe Renderer-HTTP-Anfragen müssen ausbleiben.
 
@@ -38,7 +46,7 @@ Zusätzliche Kerntests prüfen gehaltene Tasten, exakte Unisonos mit Herkunft, O
 
 ## Installationspakete
 
-Beide finalen DMGs bestehen `hdiutil verify` und die Prüfung der enthaltenen App mit `codesign --verify --deep --strict`. Beide vollständigen Offline-Desktopabläufe wurden erfolgreich mit der Apple-Silicon-App direkt aus dem schreibgeschützten DMG ausgeführt, einschließlich der gebündelten Java-Notenerkennung und der WebAssembly-Freigabe für lokale PDF-Decoder. Der abschließende Status steht in `VALIDIERUNG.json`, die Laufdetails in `test-results/package-report.json`.
+Beide finalen DMGs bestehen `hdiutil verify` und die Prüfung der enthaltenen App mit `codesign --verify --deep --strict`. Die drei vollständigen Offline-Desktopabläufe einschließlich der neuen Fassungsregressionen wurden erfolgreich mit der Apple-Silicon-App direkt aus dem schreibgeschützten DMG ausgeführt, einschließlich der gebündelten Java-Notenerkennung und der WebAssembly-Freigabe für lokale PDF-Decoder. Der abschließende Status steht in `VALIDIERUNG.json`, die Laufdetails in `test-results/package-report.json`.
 
 ## Manuelle Hörabnahme – noch offen
 

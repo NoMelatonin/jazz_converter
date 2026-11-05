@@ -21,15 +21,21 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { PdfService } from "./pdf-service";
+import { PlaybackStore, sourceRevision } from "./playback-store";
+import { assertSong, playbackError } from "../src/core/playback";
+import { exportMidi } from "../src/core/midi";
+import { exportMusicXml } from "../src/core/musicxml";
 import { validateScore } from "../src/core/score-review";
 import { demoMidi, demoXml } from "../src/core/demo";
 import { ONLINE_CATALOGUE } from "../src/core/catalogue";
 import { add, beat, cmp } from "../src/core/time";
 import type {
   Arrangement,
+  CatalogEntry,
   CatalogSong,
   Settings,
   Song,
+  PlaybackRequest,
 } from "../src/core/model";
 
 protocol.registerSchemesAsPrivileged([
@@ -48,6 +54,22 @@ if (process.env.JAZZ_DATA_DIR)
 let win: BrowserWindow;
 let worker: Worker | undefined;
 let pdfService: PdfService;
+let playbackStore: PlaybackStore;
+const writes = new Map<string, Promise<unknown>>();
+async function catalogWrite<T>(
+  id: unknown,
+  action: () => Promise<T>,
+): Promise<T> {
+  const key = idSchema.parse(id),
+    previous = writes.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(action);
+  writes.set(key, next);
+  try {
+    return await next;
+  } finally {
+    if (writes.get(key) === next) writes.delete(key);
+  }
+}
 let nextRequest = 0;
 const pending = new Map<
   number,
@@ -136,37 +158,59 @@ async function atomicJson(file: string, data: unknown) {
 }
 async function load(id: unknown): Promise<CatalogSong> {
   const safe = idSchema.parse(id);
-  const record = JSON.parse(
-    await readFile(path.join(store(), `${safe}.json`), "utf8"),
-  ) as CatalogSong;
+  const bytes = await readFile(path.join(store(), `${safe}.json`), "utf8");
+  let record: CatalogSong;
+  try {
+    record = JSON.parse(bytes);
+  } catch {
+    throw new Error(
+      "Dieser Katalogeintrag ist beschädigt und nicht abspielbar. Die gespeicherte Datei bleibt erhalten.",
+    );
+  }
   if (
+    !record?.entry ||
+    typeof record.entry.title !== "string" ||
+    typeof record.entry.artist !== "string" ||
+    typeof record.entry.version !== "string" ||
+    !record.song ||
     record.entry.id !== safe ||
-    record.song.id !== safe ||
-    !record.song.tracks.length
+    record.song.id !== safe
   )
     throw new Error(
       "Dieser Katalogeintrag ist beschädigt. Bitte die Quelldatei erneut importieren.",
     );
-  return record;
+  return {
+    ...record,
+    sourceRevision: sourceRevision(record.song),
+    entry: { ...record.entry, playbackError: playbackError(record.song) },
+  };
 }
 async function list() {
-  const records: CatalogSong[] = [];
+  const records: CatalogEntry[] = [];
   for (const name of (await readdir(store())).filter((n) =>
     /^[a-f0-9]{64}\.json$/.test(n),
   )) {
     try {
-      records.push(await load(name.slice(0, -5)));
+      records.push((await load(name.slice(0, -5))).entry);
     } catch {
-      /* A damaged record never prevents access to the remaining library. */
+      records.push({
+        id: name.slice(0, -5),
+        title: "Beschädigter Katalogeintrag",
+        artist: "Unbekannt",
+        version: "Gespeicherte Datei",
+        format: "Unbekannt",
+        source: name,
+        license: "Nicht angegeben",
+        playbackError:
+          "Die gespeicherten Katalogdaten sind beschädigt und nicht abspielbar. Die Datei bleibt erhalten.",
+      });
     }
   }
-  return records
-    .map((r) => r.entry)
-    .sort(
-      (a, b) =>
-        a.title.localeCompare(b.title, "de") ||
-        a.version.localeCompare(b.version, "de"),
-    );
+  return records.sort(
+    (a, b) =>
+      a.title.localeCompare(b.title, "de") ||
+      a.version.localeCompare(b.version, "de"),
+  );
 }
 async function importBytes(
   bytes: Uint8Array,
@@ -186,6 +230,7 @@ async function importBytes(
     if (e.code !== "ENOENT") throw e;
   }
   const song = await workerJob<Song>({ action: "import", bytes, filename });
+  assertSong(song);
   song.id = id;
   if (origin?.title) song.title = origin.title;
   if (origin?.artist) song.artist = origin.artist;
@@ -210,7 +255,7 @@ async function importBytes(
     if (e.code !== "EEXIST") throw e;
   });
   await atomicJson(path.join(store(), `${id}.json`), record);
-  return record;
+  return load(id);
 }
 function checkedSettings(input: unknown, song: Song): Settings {
   const settings = settingsSchema.parse(input);
@@ -274,12 +319,23 @@ app
   .whenReady()
   .then(async () => {
     await mkdir(store(), { recursive: true });
+    playbackStore = new PlaybackStore(
+      app.getPath("userData"),
+      load,
+      async (song, settings) =>
+        workerJob<Arrangement>({
+          action: "arrange",
+          song,
+          settings: checkedSettings(settings, song),
+        }),
+    );
     pdfService = new PdfService(
       app.getPath("userData"),
       app.isPackaged
         ? path.join(process.resourcesPath, "omr")
         : path.resolve("resources/omr"),
       async (song, source, jobId, index, doc) => {
+        assertSong(song);
         const id = createHash("sha256")
           .update(`${jobId}:${index}`)
           .digest("hex");
@@ -308,7 +364,7 @@ app
           if (e.code !== "EEXIST") throw e;
         });
         await atomicJson(path.join(store(), `${id}.json`), record);
-        return record;
+        return load(id);
       },
     );
     await pdfService.init();
@@ -316,13 +372,23 @@ app
       version: "Demo · Melodie mit Akkorden",
       source: "Mitgelieferte Dateifassung",
       license: "CC0 1.0",
-    });
+    }).catch((error) =>
+      console.warn(
+        "Demo-Katalogeintrag kann nicht geladen werden:",
+        error.message,
+      ),
+    );
     await importBytes(demoMidi(), "Bruder Jakob.mid", {
       artist: "Traditionell",
       version: "Demo · Mehrspurige MIDI-Datei",
       source: "Mitgelieferte Dateifassung",
       license: "CC0 1.0",
-    });
+    }).catch((error) =>
+      console.warn(
+        "Demo-Katalogeintrag kann nicht geladen werden:",
+        error.message,
+      ),
+    );
     protocol.handle("jazz", (request) => {
       const url = new URL(request.url);
       if (url.hostname !== "app")
@@ -408,19 +474,21 @@ app
       });
       return result.canceled ? [] : importPaths(result.filePaths);
     });
-    handle("catalog:update", async (id, input) => {
-      const metadata = z
-        .object({
-          title: z.string().trim().min(1).max(200),
-          artist: z.string().trim().min(1).max(200),
-        })
-        .parse(input);
-      const record = await load(id);
-      Object.assign(record.entry, metadata);
-      Object.assign(record.song, metadata);
-      await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
-      return record;
-    });
+    handle("catalog:update", async (id, input) =>
+      catalogWrite(id, async () => {
+        const metadata = z
+          .object({
+            title: z.string().trim().min(1).max(200),
+            artist: z.string().trim().min(1).max(200),
+          })
+          .parse(input);
+        const record = await load(id);
+        Object.assign(record.entry, metadata);
+        Object.assign(record.song, metadata);
+        await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
+        return load(id);
+      }),
+    );
     handle("catalog:download", async (input) => {
       const entry = ONLINE_CATALOGUE.find(
         (e) => e.id === z.string().parse(input),
@@ -462,32 +530,59 @@ app
         );
       }
     });
-    handle("arrange", async (id, input) => {
-      const record = await load(id),
-        settings = checkedSettings(input, record.song);
-      const result = await workerJob<Arrangement>({
-        action: "arrange",
-        song: record.song,
-        settings,
-      });
-      record.settings = settings;
-      await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
-      return result;
+    handle("arrange", async (id, input, revision) =>
+      catalogWrite(id, async () => {
+        const record = await load(id),
+          settings = checkedSettings(input, record.song);
+        const result = await playbackStore.resolve(
+          record.entry.id,
+          { kind: "arrangement", settings },
+          revision === undefined
+            ? record.sourceRevision
+            : idSchema.parse(revision),
+        );
+        record.settings = settings;
+        await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
+        return result.music;
+      }),
+    );
+    const requestSchema = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("original") }),
+      z.object({
+        kind: z.literal("melody"),
+        trackId: z.string().min(1).max(200),
+      }),
+      z.object({ kind: z.literal("arrangement"), settings: settingsSchema }),
+    ]);
+    handle("playback:resolve", async (id, input, revision) => {
+      const request = requestSchema.parse(input) as PlaybackRequest;
+      return playbackStore.resolve(
+        idSchema.parse(id),
+        request,
+        revision === undefined ? undefined : idSchema.parse(revision),
+      );
     });
+    handle("playback:load", async (id, versionId) =>
+      playbackStore.load(idSchema.parse(id), idSchema.parse(versionId)),
+    );
     handle("midi:save", async (id, input) => {
-      const record = await load(id),
-        settings = checkedSettings(input, record.song);
-      const bytes = await workerJob<Uint8Array>({
-        action: "export",
-        song: record.song,
-        settings,
-      });
+      const record = await load(id);
+      const snapshot =
+        typeof input === "string"
+          ? await playbackStore.load(record.entry.id, idSchema.parse(input))
+          : await playbackStore.resolve(record.entry.id, {
+              kind: "arrangement",
+              settings: checkedSettings(input, record.song),
+            });
+      const settings = snapshot.music.settings,
+        bytes = exportMidi(snapshot.music);
       const result = await dialog.showSaveDialog(win, {
         title: "MIDI speichern",
         defaultPath: `${record.song.title.replace(/[/\\:]/g, "-")} – ${settings.mode === "original" ? "Klavier" : settings.mode === "reduction" ? "Klavierfassung" : "Swing"}.mid`,
         filters: [{ name: "Standard-MIDI", extensions: ["mid"] }],
       });
       if (result.canceled || !result.filePath) return null;
+      await playbackStore.load(record.entry.id, snapshot.id);
       await writeFile(result.filePath, bytes);
       return result.filePath;
     });
@@ -522,6 +617,7 @@ app
     handle("pdf:cancel", async (id) => pdfService.cancel(idSchema.parse(id)));
     handle("piano:analyze", async (id, trackId) => {
       const record = await load(id);
+      assertSong(record.song);
       return workerJob({
         action: "piano-analysis",
         song: record.song,
@@ -530,13 +626,19 @@ app
       });
     });
     handle("musicxml:save", async (id, input) => {
-      const record = await load(id),
-        settings = input ? checkedSettings(input, record.song) : undefined;
-      const xml = await workerJob<string>({
-        action: "musicxml",
-        song: record.song,
-        settings,
-      });
+      const record = await load(id);
+      assertSong(record.song);
+      const snapshot =
+        typeof input === "string"
+          ? await playbackStore.load(record.entry.id, idSchema.parse(input))
+          : input
+            ? await playbackStore.resolve(record.entry.id, {
+                kind: "arrangement",
+                settings: checkedSettings(input, record.song),
+              })
+            : undefined;
+      const settings = snapshot?.music.settings;
+      const xml = exportMusicXml(snapshot ? snapshot.music : record.song);
       const result = await dialog.showSaveDialog(win, {
         title: settings
           ? "Klavierfassung als MusicXML speichern"
@@ -545,24 +647,28 @@ app
         filters: [{ name: "MusicXML", extensions: ["musicxml"] }],
       });
       if (result.canceled || !result.filePath) return null;
+      if (snapshot) await playbackStore.load(record.entry.id, snapshot.id);
       await writeFile(result.filePath, xml, "utf8");
       return result.filePath;
     });
-    handle("score:correct", async (id, input) => {
-      const record = await load(id);
-      const corrected = validateScore(input, record.song);
-      record.song = {
-        ...record.song,
-        ...corrected,
-        issues: [],
-        pdf: record.song.pdf
-          ? { ...record.song.pdf, reviewed: true }
-          : undefined,
-      };
-      delete record.settings;
-      await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
-      return record;
-    });
+    handle("score:correct", async (id, input) =>
+      catalogWrite(id, async () => {
+        const record = await load(id);
+        const corrected = validateScore(input, record.song);
+        record.song = {
+          ...record.song,
+          ...corrected,
+          issues: [],
+          pdf: record.song.pdf
+            ? { ...record.song.pdf, reviewed: true }
+            : undefined,
+        };
+        delete record.settings;
+        assertSong(record.song);
+        await atomicJson(path.join(store(), `${record.entry.id}.json`), record);
+        return load(id);
+      }),
+    );
     await win.loadURL(dev ?? "jazz://app/");
     app.on("activate", () => {
       if (win.isDestroyed()) app.relaunch();

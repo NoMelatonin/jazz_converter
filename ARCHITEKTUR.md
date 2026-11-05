@@ -1,6 +1,6 @@
 # Jazz Converter verstehen: Architektur und Software-Stack
 
-Stand: Version 2.0.0. Diese Datei erklärt die tatsächlich implementierte App. Du kannst bei jeder Stufe aufhören und später eine Ebene tiefer weiterlesen.
+Stand: Version 2.0.1. Diese Datei erklärt die tatsächlich implementierte App. Du kannst bei jeder Stufe aufhören und später eine Ebene tiefer weiterlesen.
 
 | Lesestufe                                                                  | Für wen?                                    | Danach verstehst du …                                |
 | -------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------- |
@@ -193,6 +193,8 @@ pdf-cache/<Auftrag>/
   input.pdf           Gewählte und gedrehte Seiten für die Erkennung
   recognition.log     Diagnose des Erkennungslaufs
   output/             Audiveris-MXL und OMR-Arbeitsdateien
+versions/<Song-ID>/<Fassungs-ID>.json
+                      Unveränderliche Noten-/Zeitdaten einer abspielbaren Fassung
 omr-home/
   config/ data/ log/  Private Audiveris-Daten und mitgelieferte Sprachdateien
   native-cache/       Entpackte native Java-Hilfsbibliotheken
@@ -251,7 +253,19 @@ Die Präferenzkosten wählen einen Weg; sie beschneiden die zulässige Suche nic
 
 Der musikalische Kern verwendet keine Zufallszahlen, Uhrzeiten oder generative Modelle zur Notenauswahl. Sortierreihenfolgen, Griffkosten, Oktavwahl und Exportreihenfolge sind festgelegt. Die Engine-Version ist Teil der Exportmetadaten.
 
-**Die automatische Garantie und ihre Testgrenze:** Dasselbe normalisierte Quellmodell mit denselben Einstellungen und derselben Engine-Version erzeugt bytegleiche MIDI-Dateien. Die Tests vergleichen diese Bytes direkt. Zusätzlich wurden Klavier-PDF und Orchester-Scan jeweils mit frischem OMR-Arbeitsordner erneut erkannt; ihre MIDI-Dateien stimmen in beiden Stufen bytegenau mit dem ersten Lauf überein. Dieser Vergleich gilt für die getestete Apple-Silicon-Umgebung. PDF-Erkennung ist ein vorgelagerter Prozess mit eigenen Modellen und Laufzeitfassungen; OMR-Arbeitsarchive enthalten zusätzliche Metadaten. Eine allgemeine Bytegleichheit der Erkennungsarchive oder identische OCR über unterschiedliche Mac-Architekturen wird nicht behauptet.
+**Die automatische Garantie und ihre Testgrenze:** Dasselbe normalisierte Quellmodell mit denselben Einstellungen und derselben Engine-Version erzeugt bytegleiche MIDI-Dateien. Die Tests vergleichen diese Bytes direkt. Im Referenzlauf von Version 2.0.0 wurden zusätzlich Klavier-PDF und Orchester-Scan jeweils mit frischem OMR-Arbeitsordner erneut erkannt; ihre MIDI-Dateien stimmen in beiden Stufen bytegenau mit dem ersten Lauf überein. Dieser Vergleich gilt für die getestete Apple-Silicon-Umgebung. PDF-Erkennung ist ein vorgelagerter Prozess mit eigenen Modellen und Laufzeitfassungen; OMR-Arbeitsarchive enthalten zusätzliche Metadaten. Eine allgemeine Bytegleichheit der Erkennungsarchive oder identische OCR über unterschiedliche Mac-Architekturen wird nicht behauptet.
+
+### Fassungen: Quelle, Speicherung und Wiedergabe
+
+`src/core/playback.ts` enthält die gemeinsame Prüfung von Quelle, Noten, Zeitachse und Klavierfassung. Sie greift beim Import, bei der Konvertierung, beim Laden gespeicherter Fassungen und im Transport. Mindestens eine gültige Note muss vorhanden sein; ungültige Tonhöhen, Dauer null, unhörbare Anschlagstärken und Noten außerhalb der Songlänge werden mit einem Fehler abgewiesen.
+
+`desktop/playback-store.ts` verwaltet `PlaybackVersion`. Diese Daten verbinden Quellkennung und Quellrevision mit Fassungsart (Original, Melodie oder Arrangement), Einstellungen, Engine-Version und einer vollständigen `Arrangement`-Notenliste. Eine zusätzliche Prüfsumme erkennt beschädigte oder vertauschte Fassungsdaten. Neue Dateien werden atomar angelegt; vorhandene Fassungen werden nicht überschrieben.
+
+Die Oberfläche fordert über `getPlaybackVersion()` eine Fassung an. Eine bestehende passende Datei wird geladen; eine fehlende wird aus der geprüften Quelle erzeugt und gespeichert. `loadPlaybackVersion()` prüft unmittelbar vor dem Abspielen erneut die Zugehörigkeit und die Daten. Die Exportfunktionen erhalten dieselbe Fassungskennung und konvertieren die angezeigten Noten nicht erneut. Die früheren Aufrufe mit Einstellungen bleiben als kompatible Schnittstelle erhalten und lösen intern ebenfalls eine gespeicherte Fassung auf.
+
+Bei geänderten Quelldaten werden alte Referenzen ausdrücklich abgewiesen. Neue Fassungen erhalten neue Kennungen. Die bisherigen Dateien bleiben erhalten. Ältere Katalogeinträge ohne Fassungsdatei werden erst bei Bedarf ergänzt; bloßes Laden oder eine Hörprobe schreibt deren Quelldatei und Katalog-JSON nicht um. Die PDF-Ansicht übernimmt bestehende Einstellungen, statt sie mit Automatisch/Einfach zu ersetzen.
+
+Anfragen der Oberfläche besitzen eine Gültigkeitskennung: Nach Navigation, Songwechsel oder einer neueren Anfrage darf eine verspätete Antwort keine andere Fassung einsetzen. Katalogänderungen werden pro Song nacheinander verarbeitet; der Fassungsdienst prüft die Quellrevision zusätzlich nach einer asynchronen Konvertierung.
 
 ### Eine Uhr für Ton und Bild
 
@@ -285,6 +299,7 @@ npm test                 # Import, Handregeln, Reduktion, XML/MIDI, Transport
 npm run build            # Typprüfung und Produktionsbuild
 npm run verify:pdf       # Echte Java-Erkennung auf Referenz-PDFs und Scans
 npm run test:e2e         # Bisheriger vollständiger Offline-Desktopablauf
+npm run test:e2e:versions # Fassungsdaten, Altbestand und Fehlerfälle
 npm run test:e2e:pdf     # PDF-Vorschau bis Korrektur und Export in Electron
 npm run package          # Beide macOS-DMGs bauen
 npm run verify:package   # DMGs und Signaturen, arm64-App direkt daraus testen

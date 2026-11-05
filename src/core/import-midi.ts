@@ -100,7 +100,11 @@ export function importMidi(bytes: Uint8Array, filename: string): Song {
         pending.set(id, queue);
       } else {
         const start = pending.get(id)?.shift();
-        if (start && ticks > start.ticks) {
+        if (start) {
+          if (ticks <= start.ticks)
+            throw new Error(
+              "Eine MIDI-Note hat keine positive Dauer. Bitte die Quelldatei korrigieren.",
+            );
           const track = channelTrack(event.channel);
           track.notes.push({
             id: `m-${ti}-${start.serial}`,

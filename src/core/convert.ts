@@ -1,10 +1,12 @@
 import type { Song, Settings, Arrangement } from "./model";
 import { arrange } from "./arrange";
 import { pianoArrangement } from "./piano";
+import { assertPlayback, assertSong } from "./playback";
 export function convertArrangement(
   song: Song,
   settings: Settings,
 ): Arrangement {
+  assertSong(song);
   if (settings.mode && settings.mode !== "swing")
     return pianoArrangement(song, settings);
   if (settings.melodyTrackId !== "auto") return arrange(song, settings);
@@ -25,10 +27,12 @@ export function convertArrangement(
     ...settings,
     melodyTrackId: "automatic-melody",
   });
-  return {
+  const output = {
     ...result,
     settings,
     report: reduction.report,
     warnings: [...result.warnings, ...reduction.warnings],
   };
+  assertPlayback(output);
+  return output;
 }
